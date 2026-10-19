@@ -54,6 +54,52 @@ func check(_ condition: @autoclosure () -> Bool, _ message: String) {
             print("LIVE polls=\(polls) bytes=\(bytes) seconds=\(Date().timeIntervalSince(started)) files=\(s.filesScanned)/\(s.filesTotal) events=\(s.events.count) incrementalBytes=\(incremental.bytesRead) warning=\(s.warning ?? "none")")
             return
         }
+        let largeRows = folder(); defer { try? FileManager.default.removeItem(at: largeRows) }
+        let hugeBody = String(repeating: "ignored ", count: 1_200_000)
+        let hugeCompaction = "{\"payload\":{\"replacement_history\":\"" + hugeBody + "\",\"latest_token_usage_record\":{\"response_id\":\"large-compact\",\"thread_id\":\"large\",\"usage\":{\"input_tokens\":700,\"output_tokens\":30}}},\"timestamp\":\"" + stamp() + "\",\"type\":\"compacted\"}\n"
+        write(meta("large") + hugeCompaction + record("large-compact", input: 700, session: "large") + json("response_item", ["unused": hugeBody]) + record("after-large", session: "large"), largeRows)
+        let largeCollector = CodexUsageCollector(rootDirectory: largeRows)
+        var largeSnapshot = await settled(largeCollector)
+        check(largeSnapshot.warning == nil && largeSnapshot.events.count == 2 && largeSnapshot.events.reduce(0) { $0 + $1.usage.total } == 840, "oversized compaction retains usage without counting its duplicate or warning about unrelated bodies")
+        append(String(hugeCompaction.dropLast()).replacingOccurrences(of: "large-compact", with: "large-partial"), largeRows)
+        largeSnapshot = await settled(largeCollector)
+        check(largeSnapshot.events.count == 2, "oversized partial rows wait for a terminating newline")
+        append("\n", largeRows); largeSnapshot = await settled(largeCollector)
+        check(largeSnapshot.events.count == 3 && largeSnapshot.warning == nil, "oversized projection survives polls and append boundaries")
+        let compressedRoot = folder(); defer { try? FileManager.default.removeItem(at: compressedRoot) }
+        let fixtureFolder = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("Fixtures")
+        let numericArchive = try! Data(contentsOf: fixtureFolder.appendingPathComponent("numeric.jsonl.zst"))
+        let largeArchive = try! Data(contentsOf: fixtureFolder.appendingPathComponent("large.jsonl.zst"))
+        let tailArchive = try! Data(contentsOf: fixtureFolder.appendingPathComponent("no-newline.jsonl.zst"))
+        func archive(_ data: Data, _ name: String) { try! data.write(to: compressedRoot.appendingPathComponent("sessions/" + name + ".jsonl.zst")) }
+        archive(largeArchive, "large")
+        let archiveCollector = CodexUsageCollector(rootDirectory: compressedRoot)
+        var compressedSnapshot = await archiveCollector.poll(now: now)
+        check(compressedSnapshot.isIndexing && compressedSnapshot.events.isEmpty && compressedSnapshot.bytesRead == largeArchive.count, "compressed output is bounded independently of small input and resumes next poll")
+        compressedSnapshot = await settled(archiveCollector)
+        check(compressedSnapshot.events.count == 2 && compressedSnapshot.events.reduce(0) { $0 + $1.usage.total } == 430 && compressedSnapshot.warning == nil, "compressed oversized compaction retains numeric usage after its body")
+        archive(numericArchive + tailArchive, "concatenated")
+        archive(numericArchive, "copy")
+        write(meta("compressed") + record("z-one", input: 90, session: "compressed"), compressedRoot, "plain-copy.jsonl")
+        compressedSnapshot = await settled(archiveCollector)
+        check(compressedSnapshot.events.count == 5 && compressedSnapshot.warning == nil, "concatenated archives and a final row without newline decode and deduplicate plain copies")
+        let archiveIdle = await archiveCollector.poll(now: now)
+        check(archiveIdle.bytesRead == 0 && !archiveIdle.isIndexing, "completed compressed streams release their context and are not reread")
+        archive(Data([0, 1, 2]), "preferred")
+        write(meta("preferred") + record("preferred-plain", session: "preferred"), compressedRoot, "preferred.jsonl")
+        compressedSnapshot = await settled(archiveCollector)
+        check(compressedSnapshot.events.count == 6 && compressedSnapshot.warning == nil, "available plain sibling takes priority over a compressed sibling")
+        archive(Data(numericArchive.prefix(numericArchive.count / 2)), "broken")
+        compressedSnapshot = await settled(archiveCollector)
+        check(compressedSnapshot.warning != nil, "truncated archive stops indexing with an explicit coverage warning")
+        archive(numericArchive, "broken")
+        compressedSnapshot = await settled(archiveCollector)
+        check(compressedSnapshot.events.count == 6 && !compressedSnapshot.isIndexing, "replaced incomplete archive retries safely and deduplicates recovered responses")
+        let manyCompressed = folder(); defer { try? FileManager.default.removeItem(at: manyCompressed) }
+        for index in 0..<70 { try! largeArchive.write(to: manyCompressed.appendingPathComponent("sessions/\(index).jsonl.zst")) }
+        let manyArchiveCollector = CodexUsageCollector(rootDirectory: manyCompressed)
+        compressedSnapshot = await settled(manyArchiveCollector)
+        check(compressedSnapshot.filesScanned == 70 && compressedSnapshot.events.count == 2 && compressedSnapshot.warning == nil, "many expanding archives finish with bounded contexts and shared response deduplication")
         let review = folder(); defer { try? FileManager.default.removeItem(at: review) }
         let firstCounts = ["input_tokens": 100, "cached_input_tokens": 0, "output_tokens": 10, "reasoning_output_tokens": 0]
         let nextCounts = ["input_tokens": 110, "cached_input_tokens": 50, "output_tokens": 20, "reasoning_output_tokens": 15]
@@ -161,7 +207,7 @@ func check(_ condition: @autoclosure () -> Bool, _ message: String) {
         s = await lc.poll(now: now)
         check(s.isIndexing && s.bytesRead <= 8 * 1024 * 1024, "large files have bounded per-poll IO and indicate remaining work")
         s = await settled(lc)
-        check(s.events.contains { $0.id.contains("after-giant") } && s.warning != nil, "oversized line is skipped with warning and following records survive")
+        check(s.events.contains { $0.id.contains("after-giant") }, "oversized unrelated line does not prevent following records")
         write(meta("bad") + "{broken json}\n" + record("good-after-bad", session: "bad"), legacy, "bad.jsonl")
         s = await settled(lc); check(s.events.contains { $0.id.contains("good-after-bad") } && s.warning != nil, "malformed lines report partial history and do not block valid records")
         let missing = CodexUsageCollector(rootDirectory: legacy.appendingPathComponent("absent"))

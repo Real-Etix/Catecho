@@ -4,7 +4,7 @@ import Darwin
 /// Reads only rollout logs. The actor owns numeric history and bounded incremental cursors.
 actor CodexUsageCollector {
     private static let pollBudget = 8 * 1024 * 1024
-    private static let lineLimit = 8 * 1024 * 1024
+    private static let lineLimit = 256 * 1024
     private static let historyLimit = 20_000
     private let root: URL
     private let historyURL: URL?
@@ -25,7 +25,12 @@ actor CodexUsageCollector {
         var inode: UInt64 = 0
         var modified: Date = .distantPast
         var tail = Data()
+        var projection: CodexJSONProjection?
         var skippingLine = false
+        var zstd: CodexZstd?
+        var compressedInput = Data()
+        var compressedFinished = false
+        var sourceSize: UInt64 = 0
         var session = ""
         var born: Date?
         var isChild = false
@@ -164,11 +169,17 @@ actor CodexUsageCollector {
         discover(now: now, allowPruning: issue == nil)
         if discoveryUnreadable || discovery?.status.failed == true { issue = .unreadable }
         let checked = refreshMetadata()
+        for path in files.keys where path.hasSuffix(".jsonl.zst") {
+            if let plain = inventory[String(path.dropLast(4))], plain.known && !plain.unreadable { files.removeValue(forKey: path) }
+        }
         if inventory.values.contains(where: { $0.unreadable }) { issue = .unreadable }
         var bytesRead = 0
+        var decodedBytes = 0
         var selected: [String] = []
         var selectedSet: Set<String> = []
-        for path in hotPaths + checked {
+        // Continue existing decoder contexts before opening another archive (at most two).
+        let decoding = files.keys.filter { files[$0]?.zstd != nil }.sorted()
+        for path in hotPaths.filter({ !$0.hasSuffix(".jsonl.zst") }) + decoding + hotPaths + checked {
             if let entry = inventory[path], needsRead(path, entry), selectedSet.insert(path).inserted { selected.append(path) }
         }
         for path in inventoryOrder where selected.count < Self.candidateLimit {
@@ -176,30 +187,38 @@ actor CodexUsageCollector {
         }
         // Content opens, metadata candidates and discovery entries all have explicit limits.
         for path in selected.prefix(Self.candidateLimit) {
-            if Task.isCancelled || bytesRead >= Self.pollBudget { break }
+            if Task.isCancelled || bytesRead >= Self.pollBudget || decodedBytes >= Self.pollBudget { break }
             guard var entry = inventory[path], entry.known, !entry.unreadable else { continue }
             var cursor = files[path] ?? Cursor()
-            if cursor.inode != entry.inode || entry.size < cursor.offset || (entry.size == cursor.offset && entry.modified != cursor.modified) { cursor = Cursor() }
+            let compressed = path.hasSuffix(".jsonl.zst")
+            if cursor.inode != entry.inode || entry.size < cursor.offset || (entry.size == cursor.offset && entry.modified != cursor.modified)
+                || (compressed && (cursor.sourceSize != entry.size || cursor.modified != entry.modified)) { cursor = Cursor() }
             cursor.inode = entry.inode; cursor.modified = entry.modified
-            guard cursor.offset < entry.size else { files[path] = cursor; continue }
+            cursor.sourceSize = entry.size
+            guard cursor.offset < entry.size || (compressed && !cursor.compressedFinished) else { files[path] = cursor; continue }
             do {
                 let handle = try FileHandle(forReadingFrom: entry.url)
                 defer { try? handle.close() }
                 try handle.seek(toOffset: cursor.offset)
-                while cursor.offset < entry.size && bytesRead < Self.pollBudget && !Task.isCancelled {
-                    let length = min(256 * 1024, Self.pollBudget - bytesRead, Int(min(entry.size - cursor.offset, UInt64(Int.max))))
-                    guard let chunk = try handle.read(upToCount: length), !chunk.isEmpty else { break }
-                    bytesRead += chunk.count; cursor.offset += UInt64(chunk.count)
-                    consume(chunk, cursor: &cursor, now: now)
+                if compressed {
+                    if cursor.zstd == nil && files.values.filter({ $0.zstd != nil }).count >= 2 { continue }
+                    readCompressed(handle, size: entry.size, cursor: &cursor, bytes: &bytesRead, decoded: &decodedBytes, now: now)
+                } else {
+                    while cursor.offset < entry.size && bytesRead < Self.pollBudget && decodedBytes < Self.pollBudget && !Task.isCancelled {
+                        let length = min(256 * 1024, Self.pollBudget - bytesRead, Self.pollBudget - decodedBytes, Int(min(entry.size - cursor.offset, UInt64(Int.max))))
+                        guard let chunk = try handle.read(upToCount: length), !chunk.isEmpty else { break }
+                        bytesRead += chunk.count; decodedBytes += chunk.count; cursor.offset += UInt64(chunk.count)
+                        consume(chunk, cursor: &cursor, now: now)
+                    }
                 }
             } catch { issue = .unreadable; entry.unreadable = true; inventory[path] = entry }
             if cursor.tail.isEmpty { cursor.tail = Data() }
             files[path] = cursor
         }
-        if files.values.reduce(0, { $0 + $1.tail.count }) > 16 * 1024 * 1024 {
+        if files.values.reduce(0, { $0 + $1.tail.count + ($1.projection?.retainedByteEstimate ?? 0) }) > 16 * 1024 * 1024 {
             warnings.insert("Incomplete rollout lines exceeded the memory limit; history is partial.")
-            for path in files.keys where !(files[path]?.tail.isEmpty ?? true) {
-                files[path]?.tail.removeAll(keepingCapacity: false); files[path]?.skippingLine = true
+            for path in files.keys where !(files[path]?.tail.isEmpty ?? true) || files[path]?.projection != nil {
+                files[path]?.tail = Data(); files[path]?.projection = nil; files[path]?.skippingLine = true
             }
         }
         if inventory.isEmpty && discovery == nil && hasDiscovered && issue == nil { issue = .noLogs }
@@ -214,8 +233,10 @@ actor CodexUsageCollector {
     }
     private func needsRead(_ path: String, _ entry: InventoryFile) -> Bool {
         guard entry.known, !entry.unreadable else { return false }
+        // When both representations exist, the live plain log has priority.
+        if path.hasSuffix(".jsonl.zst"), let plain = inventory[String(path.dropLast(4))], plain.known && !plain.unreadable { return false }
         guard let cursor = files[path] else { return true }
-        return cursor.inode != entry.inode || entry.size != cursor.offset || entry.modified != cursor.modified
+        return cursor.inode != entry.inode || entry.size != cursor.offset || entry.modified != cursor.modified || (path.hasSuffix(".jsonl.zst") && !cursor.compressedFinished)
     }
     private func isMissing(_ error: Error) -> Bool {
         let error = error as NSError
@@ -233,10 +254,10 @@ actor CodexUsageCollector {
             guard let url = iterator.nextObject() as? URL else { scan.index += 1; continue }
             visited += 1
             if url.lastPathComponent.hasPrefix(".") { iterator.skipDescendants(); continue }
-            if url.lastPathComponent.contains(".jsonl.") {
+            if url.lastPathComponent.contains(".jsonl.") && !url.lastPathComponent.hasSuffix(".jsonl.zst") {
                 warnings.insert("Compressed or unsupported rollout files were skipped; history is partial."); continue
             }
-            guard url.pathExtension == "jsonl" else { continue }
+            guard url.pathExtension == "jsonl" || url.lastPathComponent.hasSuffix(".jsonl.zst") else { continue }
             if var entry = inventory[url.path] { entry.generation = scan.generation; inventory[url.path] = entry }
             else if inventory.count < Self.inventoryLimit {
                 inventory[url.path] = InventoryFile(url: url, generation: scan.generation)
@@ -297,6 +318,38 @@ actor CodexUsageCollector {
         }.prefix(8).map { $0 }
         return selected
     }
+    private func readCompressed(_ handle: FileHandle, size: UInt64, cursor: inout Cursor, bytes: inout Int, decoded: inout Int, now: Date) {
+        do {
+            if cursor.zstd == nil { cursor.zstd = try CodexZstd() }
+            while decoded < Self.pollBudget && !Task.isCancelled {
+                if cursor.compressedInput.isEmpty && cursor.offset < size {
+                    guard bytes < Self.pollBudget else { break }
+                    let length = min(256 * 1024, Self.pollBudget - bytes, Int(min(size - cursor.offset, UInt64(Int.max))))
+                    guard let data = try handle.read(upToCount: length), !data.isEmpty else { throw CompressedReadError.truncated }
+                    cursor.compressedInput = data; cursor.offset += UInt64(data.count); bytes += data.count
+                }
+                let chunk = try cursor.zstd!.decode(cursor.compressedInput, outputLimit: min(256 * 1024, Self.pollBudget - decoded))
+                cursor.compressedInput = Data(cursor.compressedInput.dropFirst(chunk.consumed))
+                decoded += chunk.output.count
+                consume(chunk.output, cursor: &cursor, now: now)
+                if chunk.frameComplete && cursor.offset == size && cursor.compressedInput.isEmpty {
+                    cursor.compressedFinished = true; cursor.zstd = nil
+                    // A complete archive may omit the final JSONL newline.
+                    finishLine(cursor: &cursor, now: now)
+                    break
+                }
+                if chunk.consumed == 0 && chunk.output.isEmpty {
+                    if cursor.offset == size { throw CompressedReadError.truncated }
+                    if !cursor.compressedInput.isEmpty { throw CompressedReadError.invalid }
+                }
+            }
+        } catch {
+            warnings.insert("Some compressed rollout history could not be decoded (invalid, incomplete, or beyond the 8 MiB window limit); history is partial.")
+            cursor.zstd = nil; cursor.compressedInput = Data(); cursor.compressedFinished = true; cursor.offset = size
+            cursor.tail = Data(); cursor.projection = nil; cursor.skippingLine = false
+        }
+    }
+    private enum CompressedReadError: Error { case truncated, invalid }
     private func consume(_ chunk: Data, cursor: inout Cursor, now: Date) {
         chunk.withUnsafeBytes { raw in
             guard let base = raw.baseAddress else { return }
@@ -305,19 +358,29 @@ actor CodexUsageCollector {
                 let newline = memchr(base.advanced(by: start), 10, chunk.count - start)
                 let end = newline.map { base.distance(to: UnsafeRawPointer($0)) } ?? chunk.count
                 if !cursor.skippingLine {
-                    if cursor.tail.count + end - start <= Self.lineLimit { cursor.tail.append(chunk[start..<end]) }
-                    else {
-                        cursor.tail.removeAll(keepingCapacity: false); cursor.skippingLine = true
-                        warnings.insert("An oversized rollout line was skipped; history is partial.")
+                    if cursor.projection == nil && cursor.tail.count + end - start > Self.lineLimit {
+                        cursor.projection = CodexJSONProjection()
+                        cursor.projection?.consume(cursor.tail)
+                        cursor.tail = Data()
                     }
+                    if let projection = cursor.projection { projection.consume(Data(chunk[start..<end])) }
+                    else { cursor.tail.append(chunk[start..<end]) }
                 }
                 if end < chunk.count {
-                    if !cursor.skippingLine && !cursor.tail.isEmpty { parse(cursor.tail, cursor: &cursor, now: now) }
-                    cursor.tail.removeAll(keepingCapacity: cursor.tail.count <= 256 * 1024); cursor.skippingLine = false
+                    finishLine(cursor: &cursor, now: now)
                     start = end + 1
                 } else { break }
             }
         }
+    }
+    private func finishLine(cursor: inout Cursor, now: Date) {
+        if !cursor.skippingLine {
+            if let projection = cursor.projection {
+                if let line = projection.finish() { parse(line, cursor: &cursor, now: now) }
+                else { warnings.insert("Some oversized rollout records could not be decoded within the structural limits; history is partial.") }
+            } else if !cursor.tail.isEmpty { parse(cursor.tail, cursor: &cursor, now: now) }
+        }
+        cursor.tail = Data(); cursor.projection = nil; cursor.skippingLine = false
     }
     private func date(_ text: String?) -> Date? {
         guard let text else { return nil }

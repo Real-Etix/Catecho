@@ -14,13 +14,13 @@ Codex writes usage in batches. A display that refreshes once a second is not a m
 
 ## Local reading and storage
 
-Catecho reads JSONL files inside `sessions` and `archived_sessions` beneath `CODEX_HOME`, or `~/.codex` when that variable is unavailable. GUI apps may not inherit terminal environment variables, so the rear controls offer a folder chooser. Select the parent folder containing `sessions`.
+Catecho reads plain `.jsonl` and Zstandard-compressed `.jsonl.zst` files inside `sessions` and `archived_sessions` beneath `CODEX_HOME`, or `~/.codex` when that variable is unavailable. GUI apps may not inherit terminal environment variables, so the rear controls offer a folder chooser. Select the parent folder containing `sessions`.
 
 The first scan can take a while on a large archive; the screen reports indexing progress. Afterward, the reader tails changed files in bounded chunks. It checks about once a second while the Codex screen is visible and every five seconds otherwise. Disabling the station stops monitoring.
 
-The parser selects numeric usage fields and opaque session/response identifiers. It does not read auth/config files, upload records, or save conversation bodies. A numeric cache under `~/Library/Application Support/Little Radio/Usage` retains at most 24 hours and is bounded by event count and file size. Changing source folders uses a separate cache.
+The parser selects numeric usage fields and opaque session/response identifiers. Large rows use a streaming projection, so a long conversation or compaction body does not hide numeric usage later in that row. Compressed records are decoded in memory; no decompressed log is written to disk. Each poll reads at most 8 MiB of source bytes and processes at most 8 MiB of plain/decompressed bytes, with at most two decoder contexts and an 8 MiB window per decoder. It does not read auth/config files, upload records, or save conversation bodies. A numeric cache under `~/Library/Application Support/Little Radio/Usage` retains at most 24 hours and is bounded by event count and file size. Changing source folders uses a separate cache.
 
-Identified response records are deduplicated across copied/archive logs. Older cumulative snapshots use deltas and inherited-child baselines. Mixed schemas, missing baselines, oversized records, unreadable files, and unsupported compressed rollouts are marked as partial history. Missing source folders keep cached records visibly unavailable rather than implying a live zero. Local log schemas can change across Codex versions.
+Identified response records are deduplicated across plain, compressed and copied/archive logs. A readable plain sibling takes priority over its compressed copy. Older cumulative snapshots use deltas and inherited-child baselines. A large unrelated body alone no longer triggers “partial history.” Mixed schemas, missing baselines, corrupt/truncated archives, unsupported compression, structural limits, unreadable files, and numeric-history limits still do. Coverage warnings describe gaps encountered during this scan; restarting rebuilds that assessment. Missing source folders keep cached records visibly unavailable rather than implying a live zero. Local log schemas can change across Codex versions, and data that Codex never recorded cannot be reconstructed.
 
 ## References
 

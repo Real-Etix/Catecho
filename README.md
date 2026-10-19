@@ -22,7 +22,7 @@ The screenshots show sample editions. The app fetches current information from t
 - An optional Codex station for all local sessions: recorded tokens per second, minute, or hour, with an activity chart and numeric-only local cache.
 - A first-launch tuning guide for topics, research subjects, language, and optional start at login, using the radio's own physical-style controls.
 
-Built with SwiftUI and AppKit. No third-party package dependencies, app account, paid AI API, or cloud backend. Each Mac fetches its selected sources directly. Stories are publisher headlines and excerpts, not AI-written summaries.
+Built with SwiftUI and AppKit. No app account, paid AI API, or cloud backend. A small [BSD-licensed Zstandard decoder](Vendor/Zstd/README.md) is bundled for compressed local Codex history; no extra installation is needed. Each Mac fetches its selected sources directly. Stories are publisher headlines and excerpts, not AI-written summaries.
 
 ## Try the beta
 
