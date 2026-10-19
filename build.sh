@@ -5,8 +5,9 @@ RADIO_OUTPUT_DIR="${1:-$RADIO_SOURCE_DIR/dist}"
 # Keep the original executable and preference identifier for compatibility.
 RADIO_APP="$RADIO_OUTPUT_DIR/Catecho.app"
 mkdir -p "$RADIO_APP/Contents/MacOS" "$RADIO_APP/Contents/Resources"
-swiftc "${RADIO_FLAGS[@]}" -parse-as-library -O -whole-module-optimization "$RADIO_SOURCE_DIR"/Sources/Core/*.swift "$RADIO_SOURCE_DIR"/Sources/App/*.swift -o "$RADIO_APP/Contents/MacOS/LittleRadio" -framework AppKit -framework SwiftUI -framework ServiceManagement -Xlinker -weak_framework -Xlinker Translation
+swiftc "${RADIO_FLAGS[@]}" "${RADIO_LINK_FLAGS[@]}" -parse-as-library -O -whole-module-optimization "$RADIO_SOURCE_DIR"/Sources/Core/*.swift "$RADIO_SOURCE_DIR"/Sources/App/*.swift -o "$RADIO_APP/Contents/MacOS/LittleRadio" -framework AppKit -framework SwiftUI -framework ServiceManagement -Xlinker -weak_framework -Xlinker Translation
 cp "$RADIO_SOURCE_DIR/Resources/Catecho.icns" "$RADIO_APP/Contents/Resources/Catecho.icns"
+cp "$RADIO_SOURCE_DIR/Vendor/Zstd/LICENSE" "$RADIO_APP/Contents/Resources/Zstandard-LICENSE.txt"
 cat > "$RADIO_APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

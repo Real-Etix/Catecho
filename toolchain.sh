@@ -16,3 +16,15 @@ with open(sys.argv[3], 'w') as f:
 PY
     RADIO_FLAGS+=(-vfsoverlay "$RADIO_BUILD_DIR/overlay.json")
 fi
+
+# Build the vendored decompression-only decoder once per source/configuration hash.
+# The object is linked into each executable; no external zstd installation is used.
+RADIO_ZSTD_DIR="$RADIO_SOURCE_DIR/Vendor/Zstd"
+RADIO_ZSTD_OBJECT="$RADIO_BUILD_DIR/zstd-decoder.o"
+RADIO_ZSTD_HASH="$(/usr/bin/shasum -a 256 "$RADIO_ZSTD_DIR/zstddeclib.c" "$RADIO_ZSTD_DIR/include/zstd.h" "$RADIO_ZSTD_DIR/include/zstd_errors.h" "$RADIO_ZSTD_DIR/include/module.modulemap" "$RADIO_SOURCE_DIR/toolchain.sh" | /usr/bin/shasum -a 256)"
+if [ ! -f "$RADIO_ZSTD_OBJECT" ] || [ ! -f "$RADIO_BUILD_DIR/zstd-decoder.hash" ] || [ "$(cat "$RADIO_BUILD_DIR/zstd-decoder.hash")" != "$RADIO_ZSTD_HASH" ]; then
+    xcrun clang -target arm64-apple-macosx14.0 -isysroot "$RADIO_SDK" -std=c99 -O2 -fvisibility=hidden -c "$RADIO_ZSTD_DIR/zstddeclib.c" -o "$RADIO_ZSTD_OBJECT"
+    printf '%s\n' "$RADIO_ZSTD_HASH" > "$RADIO_BUILD_DIR/zstd-decoder.hash"
+fi
+RADIO_FLAGS+=(-I "$RADIO_ZSTD_DIR/include")
+RADIO_LINK_FLAGS=("$RADIO_ZSTD_OBJECT")
