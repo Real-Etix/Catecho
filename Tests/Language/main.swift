@@ -23,6 +23,8 @@ import Foundation
         for entry in RadioLanguage.strings {
             precondition(!entry.value.0.isEmpty && !entry.value.1.isEmpty, "Missing Chinese translation")
         }
+        let lifetimeWarnings = "Earlier cumulative usage has no reliable baseline; lifetime history may be incomplete. Lifetime storage is unavailable or reached its limit. Recent activity can still be shown."
+        precondition(!RadioLanguage.traditional.text(lifetimeWarnings).contains("Lifetime") && !RadioLanguage.simplified.text(lifetimeWarnings).contains("Earlier"))
         precondition(RadioLanguage.traditional.text("Source: The source returned HTTP 404. Try again later.") == "Source: 來源傳回 HTTP 404。請稍後重試。", "HTTP diagnostics must follow interface language")
         let item = RadioItem(id: "id", title: "owner/repository", excerpt: "An English description", source: "GitHub", url: URL(string: "https://github.com/owner/repository")!, publishedAt: nil, metric: "123 total stars")
         let request = ArticleTranslationRequest(item: item, language: .traditional, repository: true)

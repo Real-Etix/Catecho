@@ -16,8 +16,8 @@ struct CodexUsageView: View {
     private func content(now: Date) -> some View {
         let snapshot = monitor.snapshot
         let events = monitor.scopedEvents
-        let usage = monitor.window.total(events, now: now)
-        let unavailable = snapshot == nil || (snapshot?.issue != nil && events.isEmpty)
+        let usage = monitor.usage(now: now)
+        let unavailable = monitor.readingUnavailable
         return VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
                 Text("Codex").font(.system(size: 20, weight: .medium, design: .serif))
@@ -45,8 +45,9 @@ struct CodexUsageView: View {
                 Spacer(minLength: 0)
             }.padding(.top, 7)
                 .help(t("Recorded updates arrive in batches. This is local token activity, not account allowance or exact generation speed."))
-            Text(t(monitor.window == .second ? "Average over the last 60 seconds" : monitor.window == .minute ? "Recorded in the last 60 seconds" : "Recorded in the last hour"))
+            Text(t(monitor.window.detail))
                 .font(.system(size: 10)).lineLimit(1).minimumScaleFactor(0.8).opacity(0.75)
+                .help(t("Lifetime includes available local records. Deleted or unrecorded usage cannot be recovered."))
             if unavailable {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(t(stateTitle(snapshot))).font(.system(size: 12, weight: .medium))
@@ -69,7 +70,7 @@ struct CodexUsageView: View {
                     .accessibilityLabel(t("Input") + " \(usage.input), " + t("Output") + " \(usage.output), " + t("Cached input") + " \(usage.cachedInput), " + t("Reasoning") + " \(usage.reasoning). " + t("Cached input is part of input; reasoning is part of output."))
             }
             Spacer(minLength: 2)
-            RadioDetentPicker(title: t("Time view"), selection: $monitor.window, options: [(.second, t("SEC")), (.minute, t("MIN")), (.hour, t("HR"))], classic: classic)
+            RadioDetentPicker(title: t("Time view"), selection: $monitor.window, options: CodexUsageWindow.allCases.map { ($0, t($0.label)) }, classic: classic)
             HStack(spacing: 4) {
                 Circle().fill(Color.radioInk.opacity(0.65)).frame(width: 4, height: 4)
                 if let snapshot, snapshot.isIndexing {
@@ -90,6 +91,7 @@ struct CodexUsageView: View {
     private func compact(_ count: Int64) -> String { count.formatted(.number.notation(.compactName)) }
     private func stateTitle(_ snapshot: CodexUsageSnapshot?) -> String {
         guard let snapshot else { return "Finding local activity" }
+        if monitor.window == .lifetime && snapshot.lifetimeSessions == nil { return "Lifetime total unavailable" }
         if snapshot.isIndexing { return "Indexing local activity" }
         switch snapshot.issue {
         case .missingFolder: return "Codex folder not found"
@@ -102,7 +104,7 @@ struct CodexUsageView: View {
         let bins = monitor.window.bins(events, now: now)
         let peak = bins.max() ?? 0
         let maximum = max(1, peak)
-        let range = monitor.window == .second ? "Last 60 seconds" : monitor.window == .minute ? "Last 60 minutes" : "Last 24 hours"
+        let range = monitor.window == .lifetime ? "Recent activity · 24h" : monitor.window == .second ? "Last 60 seconds" : monitor.window == .minute ? "Last 60 minutes" : "Last 24 hours"
         return VStack(spacing: 3) {
             Canvas { context, size in
                 let slot = size.width / Double(bins.count)
@@ -131,6 +133,8 @@ struct CodexMonitorSettings: View {
             Toggle(t("Token preview beside antenna"), isOn: $monitor.showEdgePreview)
                 .font(.system(size: 11)).toggleStyle(RadioSlideSwitchStyle(classic: classic))
             Text(t("Choose All chats or one chat on the Codex screen. The antenna preview follows that choice."))
+                .font(.system(size: 10)).fixedSize(horizontal: false, vertical: true)
+            Text(t("Lifetime includes available local records. Deleted or unrecorded usage cannot be recovered."))
                 .font(.system(size: 10)).fixedSize(horizontal: false, vertical: true)
             Text(monitor.rootDirectory.path).font(.system(size: 9, design: .monospaced)).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
             HStack {

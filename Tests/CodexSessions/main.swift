@@ -12,6 +12,9 @@ import Foundation
         precondition(CodexSessionSummary.filter(events, sessionID: "missing").isEmpty)
         precondition(CodexSessionSummary.filter(events, sessionID: "b").count == 1 && CodexSessionSummary.filter(events, sessionID: nil) == events)
         print("PASS chat grouping, expiry/future bounds, independent totals and no fallback for missing selection")
+        let huge = CodexSessionSummary(id: "huge", lastRecordedAt: now, usage: CodexTokenUsage(input: Int64.max / 2, cachedInput: 0, output: Int64.max / 2, reasoning: 0))
+        precondition(CodexSessionSummary.combinedUsage([huge, huge]).total == Int64.max - 1)
+        print("PASS combined chat totals saturate input/output consistently without double-counting subsets")
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }

@@ -19,7 +19,7 @@ The screenshots show sample editions. The app fetches current information from t
 - Custom stations: paste website links to discover RSS/Atom feeds, with a public-webpage reader as a fallback.
 - A back panel with physical-style controls, a mouse-driven flip, and a battery compartment that shows update activity.
 - English, Simplified Chinese, and Traditional Chinese interfaces. On supported Macs, Apple's on-device Translation framework can translate article snippets while keeping an Original toggle.
-- An optional Codex station for all local sessions or one selected chat: recorded tokens per second, minute, or hour, with an activity chart, a tucked antenna readout, and numeric-only local cache.
+- An optional Codex station for all local sessions or one selected chat: lifetime recorded token totals plus second/minute/hour activity views, with a recent activity chart, a tucked antenna readout, and numeric-only local storage.
 - A first-launch tuning guide for topics, research subjects, language, and optional start at login, using the radio's own physical-style controls.
 
 Built with SwiftUI and AppKit. No app account, paid AI API, or cloud backend. A small [BSD-licensed Zstandard decoder](Vendor/Zstd/README.md) is bundled for compressed local Codex history; no extra installation is needed. Each Mac fetches its selected sources directly. Stories are publisher headlines and excerpts, not AI-written summaries.

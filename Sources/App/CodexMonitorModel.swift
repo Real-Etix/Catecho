@@ -26,10 +26,10 @@ import CryptoKit
         self.historyDirectory = historyDirectory
         self.simulated = simulated
         rootDirectory = preferences.string(forKey: "codexRootPath").map { URL(fileURLWithPath: $0, isDirectory: true) } ?? Self.defaultRoot
-        window = CodexUsageWindow(rawValue: preferences.string(forKey: "codexWindow") ?? "second") ?? .second
+        window = CodexUsageWindow(rawValue: preferences.string(forKey: "codexWindow") ?? "lifetime") ?? .lifetime
         selectedSessionID = preferences.string(forKey: "codexSessionID").flatMap { !$0.isEmpty && $0.utf8.count <= 256 ? $0 : nil }
         showEdgePreview = preferences.object(forKey: "codexEdgePreview") == nil ? true : preferences.bool(forKey: "codexEdgePreview")
-        if simulated { snapshot = Self.sample(); sessionNames = ["preview-ai": "AI research notes", "preview-radio": "Building a quiet radio"] }
+        if simulated { snapshot = Self.sample(); sessionNames = ["preview-ai": "AI research notes", "preview-radio": "Building a quiet radio", "preview-old": "An earlier physics chat"] }
     }
     deinit { task?.cancel() }
     static var defaultRoot: URL {
@@ -57,16 +57,36 @@ import CryptoKit
         if let id { preferences.set(id, forKey: "codexSessionID") } else { preferences.removeObject(forKey: "codexSessionID") }
     }
     var scopedEvents: [CodexUsageEvent] { CodexSessionSummary.filter(snapshot?.events ?? [], sessionID: selectedSessionID) }
-    var scopedLastRecordedAt: Date? { scopedEvents.map(\.recordedAt).max() }
-    func sessions(now: Date) -> [CodexSessionSummary] { CodexSessionSummary.summaries(snapshot?.events ?? [], now: now) }
+    var scopedLastRecordedAt: Date? {
+        if window == .lifetime { return snapshot?.lifetimeSessions?.filter { selectedSessionID == nil || $0.id == selectedSessionID }.map(\.lastRecordedAt).max() }
+        return scopedEvents.map(\.recordedAt).max()
+    }
+    func sessions(now: Date) -> [CodexSessionSummary] { snapshot?.lifetimeSessions ?? [] }
+    func lifetimeUsage(sessionID: String?) -> CodexTokenUsage? {
+        guard let snapshot, let sessions = snapshot.lifetimeSessions else { return nil }
+        let matching = sessions.filter { sessionID == nil || $0.id == sessionID }
+        guard !matching.isEmpty || (snapshot.issue == nil && !snapshot.isIndexing) else { return nil }
+        return CodexSessionSummary.combinedUsage(matching)
+    }
+    var lifetimeEmptyMessage: String {
+        if snapshot == nil || snapshot?.isIndexing == true { return "Reading local records…" }
+        return lifetimeUsage(sessionID: nil) == nil ? "Lifetime total unavailable" : "No recorded activity yet"
+    }
+    var readingUnavailable: Bool {
+        if window == .lifetime { return lifetimeUsage(sessionID: selectedSessionID) == nil }
+        return snapshot == nil || (snapshot?.issue != nil && scopedEvents.isEmpty)
+    }
+    func usage(now: Date) -> CodexTokenUsage {
+        guard window == .lifetime else { return window.total(scopedEvents, now: now) }
+        return lifetimeUsage(sessionID: selectedSessionID) ?? CodexTokenUsage(input: 0, cachedInput: 0, output: 0, reasoning: 0)
+    }
     func title(for id: String?, language: RadioLanguage) -> String {
         guard let id else { return language.text("All chats") }
         return sessionNames[id] ?? language.text("Session") + " · " + id.suffix(8)
     }
     func reading(now: Date, compact: Bool = false) -> String {
-        let events = scopedEvents
-        guard snapshot != nil, !(snapshot?.issue != nil && events.isEmpty) else { return "—" }
-        let total = window.total(events, now: now).total
+        guard !readingUnavailable else { return "—" }
+        let total = usage(now: now).total
         if window == .second { return (Double(total) / 60).formatted(.number.precision(.fractionLength(1)).notation(compact ? .compactName : .automatic)) }
         return compact ? total.formatted(.number.notation(.compactName)) : total.formatted()
     }
@@ -123,6 +143,10 @@ import CryptoKit
             let usage = CodexTokenUsage(input: Int64(1800 + (i % 7) * 750), cachedInput: 1200, output: Int64(110 + (i % 5) * 70), reasoning: 80)
             events.append(CodexUsageEvent(id: "preview-\(i)", sessionID: i % 3 == 0 ? "preview-ai" : "preview-radio", recordedAt: now.addingTimeInterval(-age), usage: usage))
         }
-        return CodexUsageSnapshot(events: events, checkedAt: now, lastRecordedAt: now, isIndexing: false, filesScanned: 4, filesTotal: 4, issue: nil, warning: nil, bytesRead: 0)
+        var totals = CodexSessionSummary.summaries(events, now: now).map { s in
+            CodexSessionSummary(id: s.id, lastRecordedAt: s.lastRecordedAt, usage: CodexTokenUsage(input: s.usage.input + 24_000_000, cachedInput: s.usage.cachedInput + 12_000_000, output: s.usage.output + 900_000, reasoning: s.usage.reasoning + 200_000))
+        }
+        totals.append(CodexSessionSummary(id: "preview-old", lastRecordedAt: now.addingTimeInterval(-300_000), usage: CodexTokenUsage(input: 4_000_000, cachedInput: 2_000_000, output: 100_000, reasoning: 20_000)))
+        return CodexUsageSnapshot(events: events, checkedAt: now, lastRecordedAt: now, isIndexing: false, filesScanned: 4, filesTotal: 4, issue: nil, warning: nil, bytesRead: 0, lifetimeSessions: totals)
     }
 }

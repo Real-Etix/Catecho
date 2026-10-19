@@ -16,6 +16,8 @@ actor CodexUsageCollector {
     private var didLoadHistory = false
     private var historyDirty = false
     private var historyWasLimited = false
+    private var lifetime: CodexLifetimeStore?
+    private var didOpenLifetime = false
     private let decoder = JSONDecoder()
     private let fractionalDate = ISO8601DateFormatter()
     private let wholeDate = ISO8601DateFormatter()
@@ -118,6 +120,7 @@ actor CodexUsageCollector {
     private var directorySignatures: [String: DirectorySignature] = [:]
 
     func poll(now: Date = Date()) async -> CodexUsageSnapshot {
+        prepareLifetime()
         loadHistory(now: now)
         let retained = events.filter { $0.value.recordedAt >= now.addingTimeInterval(-86400) && $0.value.recordedAt <= now }
         if retained.count != events.count { historyDirty = true }
@@ -414,7 +417,7 @@ actor CodexUsageCollector {
             return
         }
         guard row.type == "token_usage_record" || row.type == "compacted" || (row.type == "event_msg" && p.type == "token_count") else { return }
-        guard let recordedAt = date(row.timestamp) else { return }
+        guard let recordedAt = date(row.timestamp), recordedAt <= now else { return }
         if cursor.isChild, let born = cursor.born, recordedAt < born { return }
         if row.type == "token_usage_record" {
             addModern(id: p.response_id, session: p.thread_id ?? p.session_id, usage: p.usage?.value, at: recordedAt, cursor: &cursor, now: now)
@@ -424,7 +427,12 @@ actor CodexUsageCollector {
             let previous = cursor.previous
             cursor.previous = current
             guard !cursor.session.isEmpty else { warnings.insert("Usage without session identity was skipped; history is partial."); return }
-            guard !cursor.modern && !modernSessions.contains(cursor.session) else { return }
+            guard !cursor.modern else { return }
+            if modernSessions.contains(cursor.session) {
+                do { try lifetime?.noteMixedHistory(cursor.session) } catch { failLifetime() }
+                warnings.insert("A session mixes cumulative and response records; only identified response usage is shown for that session.")
+                return
+            }
             var delta: CodexTokenUsage?
             if let previous {
                 if previous == current { return }
@@ -438,7 +446,12 @@ actor CodexUsageCollector {
                     }
                     delta = CodexTokenUsage(input: input, cachedInput: min(input, cached), output: output, reasoning: min(output, reasoning))
                 } else { delta = p.info?.last_token_usage?.value }
-            } else { delta = p.info?.last_token_usage?.value }
+            } else {
+                delta = p.info?.last_token_usage?.value
+                if let delta, current != delta {
+                    warnings.insert("Earlier cumulative usage has no reliable baseline; lifetime history may be incomplete.")
+                }
+            }
             guard let delta else { warnings.insert("A cumulative counter had no reliable baseline; history is partial."); return }
             let id = "legacy:\(cursor.session):\(recordedAt.timeIntervalSince1970):\(current.input):\(current.cachedInput):\(current.output):\(current.reasoning)"
             legacySessions.insert(cursor.session)
@@ -455,6 +468,7 @@ actor CodexUsageCollector {
         if !cursor.session.isEmpty && session != cursor.session { return }
         cursor.modern = true
         modernSessions.insert(session)
+        do { try lifetime?.markModern(session) } catch { failLifetime() }
         // The modern record normally precedes token_count; also reconcile an earlier snapshot.
         if legacySessions.remove(session) != nil {
             let legacy = events.values.filter { $0.sessionID == session && $0.id.hasPrefix("legacy:") }
@@ -469,7 +483,9 @@ actor CodexUsageCollector {
         insert(CodexUsageEvent(id: "response:" + id, sessionID: session, recordedAt: at, usage: usage), now: now)
     }
     private func insert(_ event: CodexUsageEvent, now: Date) {
-        guard event.recordedAt >= now.addingTimeInterval(-86400), event.recordedAt <= now, event.usage.total > 0 else { return }
+        guard event.recordedAt <= now, event.usage.total > 0 else { return }
+        do { try lifetime?.record(event) } catch { failLifetime() }
+        guard event.recordedAt >= now.addingTimeInterval(-86400) else { return }
         if events[event.id] == nil { events[event.id] = event; historyDirty = true }
     }
     private func boundHistory() {
@@ -491,6 +507,7 @@ actor CodexUsageCollector {
             warnings.insert("The restored numeric history was limited; history is partial.")
         }
         for event in history.events.prefix(Self.historyLimit) {
+            guard event.recordedAt <= now else { continue }
             guard event.id.utf8.count <= 1024, event.sessionID.utf8.count <= 256,
                   event.usage.input >= 0, event.usage.output >= 0,
                   event.usage.input <= Int64.max / 4, event.usage.output <= Int64.max / 4,
@@ -501,6 +518,16 @@ actor CodexUsageCollector {
             events[event.id] = event
             if event.id.hasPrefix("response:") { modernSessions.insert(event.sessionID) }
             if event.id.hasPrefix("legacy:") { legacySessions.insert(event.sessionID) }
+        }
+        // Upgrade the prior numeric cache before its rolling records expire.
+        // Identified response records always take precedence over legacy copies.
+        for event in events.values where event.id.hasPrefix("legacy:") && modernSessions.contains(event.sessionID) {
+            do { try lifetime?.noteMixedHistory(event.sessionID) } catch { failLifetime() }
+            warnings.insert("A session mixes cumulative and response records; only identified response usage is shown for that session.")
+            events.removeValue(forKey: event.id)
+        }
+        for event in events.values where event.recordedAt <= now && event.usage.total > 0 {
+            do { try lifetime?.record(event) } catch { failLifetime(); break }
         }
     }
     private func saveHistory() {
@@ -521,7 +548,28 @@ actor CodexUsageCollector {
         } catch { warnings.insert("The numeric usage cache could not be saved.") }
     }
     private func snapshot(_ now: Date, issue: CodexUsageIssue?, bytes: Int, pending: Bool, scanned: Int, total: Int) -> CodexUsageSnapshot {
+        var lifetimeSessions: [CodexSessionSummary]?
+        do {
+            lifetimeSessions = try lifetime?.finish()
+            if lifetime?.hasMixedHistory == true {
+                warnings.insert("A session mixes cumulative and response records; only identified response usage is shown for that session.")
+            }
+        } catch { failLifetime() }
         let ordered = events.values.sorted { $0.recordedAt == $1.recordedAt ? $0.id < $1.id : $0.recordedAt < $1.recordedAt }
-        return CodexUsageSnapshot(events: ordered, checkedAt: now, lastRecordedAt: ordered.last?.recordedAt, isIndexing: pending, filesScanned: scanned, filesTotal: total, issue: issue, warning: warnings.isEmpty ? nil : warnings.sorted().joined(separator: " "), bytesRead: bytes)
+        return CodexUsageSnapshot(events: ordered, checkedAt: now, lastRecordedAt: ordered.last?.recordedAt, isIndexing: pending, filesScanned: scanned, filesTotal: total, issue: issue, warning: warnings.isEmpty ? nil : warnings.sorted().joined(separator: " "), bytesRead: bytes, lifetimeSessions: lifetimeSessions)
+    }
+    private func prepareLifetime() {
+        do {
+            if !didOpenLifetime {
+                didOpenLifetime = true
+                lifetime = try CodexLifetimeStore(url: historyURL?.deletingPathExtension().appendingPathExtension("lifetime.sqlite"))
+                modernSessions.formUnion(lifetime?.modernSessions ?? [])
+            }
+            try lifetime?.begin()
+        } catch { failLifetime() }
+    }
+    private func failLifetime() {
+        lifetime = nil
+        warnings.insert("Lifetime storage is unavailable or reached its limit. Recent activity can still be shown.")
     }
 }

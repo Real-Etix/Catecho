@@ -37,9 +37,9 @@ swiftc "${RADIO_FLAGS[@]}" "${RADIO_LINK_FLAGS[@]}" -parse-as-library "$RADIO_SO
 "$RADIO_BUILD_DIR/login-tests"
 
 # Local Codex accounting and rolling display windows.
-swiftc "${RADIO_FLAGS[@]}" "${RADIO_LINK_FLAGS[@]}" -parse-as-library "$RADIO_SOURCE_DIR"/Sources/Core/CodexUsage*.swift "$RADIO_SOURCE_DIR/Sources/Core/CodexZstd.swift" "$RADIO_SOURCE_DIR/Sources/Core/CodexJSONProjection.swift" "$RADIO_SOURCE_DIR/Tests/CodexUsage/main.swift" -o "$RADIO_BUILD_DIR/codex-usage-tests"
+swiftc "${RADIO_FLAGS[@]}" "${RADIO_LINK_FLAGS[@]}" -parse-as-library "$RADIO_SOURCE_DIR"/Sources/Core/CodexUsage*.swift "$RADIO_SOURCE_DIR/Sources/Core/CodexZstd.swift" "$RADIO_SOURCE_DIR/Sources/Core/CodexJSONProjection.swift" "$RADIO_SOURCE_DIR/Sources/Core/CodexLifetimeStore.swift" "$RADIO_SOURCE_DIR/Sources/Core/CodexSessions.swift" "$RADIO_SOURCE_DIR/Tests/CodexUsage/main.swift" -o "$RADIO_BUILD_DIR/codex-usage-tests"
 "$RADIO_BUILD_DIR/codex-usage-tests"
-swiftc "${RADIO_FLAGS[@]}" "${RADIO_LINK_FLAGS[@]}" -parse-as-library "$RADIO_SOURCE_DIR/Sources/Core/CodexUsage.swift" "$RADIO_SOURCE_DIR/Sources/Core/CodexUsageWindow.swift" "$RADIO_SOURCE_DIR/Tests/CodexWindow/main.swift" -o "$RADIO_BUILD_DIR/codex-window-tests"
+swiftc "${RADIO_FLAGS[@]}" "${RADIO_LINK_FLAGS[@]}" -parse-as-library "$RADIO_SOURCE_DIR/Sources/Core/CodexUsage.swift" "$RADIO_SOURCE_DIR/Sources/Core/CodexUsageWindow.swift" "$RADIO_SOURCE_DIR/Sources/Core/CodexSessions.swift" "$RADIO_SOURCE_DIR/Tests/CodexWindow/main.swift" -o "$RADIO_BUILD_DIR/codex-window-tests"
 "$RADIO_BUILD_DIR/codex-window-tests"
 swiftc "${RADIO_FLAGS[@]}" "${RADIO_LINK_FLAGS[@]}" -parse-as-library "$RADIO_SOURCE_DIR"/Sources/Core/*.swift "$RADIO_SOURCE_DIR/Sources/App/RadioModel.swift" "$RADIO_SOURCE_DIR/Sources/App/CodexMonitorModel.swift" "$RADIO_SOURCE_DIR/Tests/CodexMonitor/main.swift" -o "$RADIO_BUILD_DIR/codex-monitor-tests" -framework AppKit -framework SwiftUI
 "$RADIO_BUILD_DIR/codex-monitor-tests"
@@ -54,3 +54,7 @@ swiftc "${RADIO_FLAGS[@]}" -parse-as-library "$RADIO_SOURCE_DIR/Sources/Core/Cod
 # Per-chat aggregation and optional local title metadata.
 swiftc "${RADIO_FLAGS[@]}" -parse-as-library "$RADIO_SOURCE_DIR/Sources/Core/CodexUsage.swift" "$RADIO_SOURCE_DIR/Sources/Core/CodexUsageWindow.swift" "$RADIO_SOURCE_DIR"/Sources/Core/CodexSession*.swift "$RADIO_SOURCE_DIR/Tests/CodexSessions/main.swift" -o "$RADIO_BUILD_DIR/codex-sessions-tests"
 "$RADIO_BUILD_DIR/codex-sessions-tests"
+
+# Durable per-chat lifetime accounting.
+swiftc "${RADIO_FLAGS[@]}" "${RADIO_LINK_FLAGS[@]}" -parse-as-library "$RADIO_SOURCE_DIR"/Sources/Core/Codex*.swift "$RADIO_SOURCE_DIR/Tests/CodexLifetime/main.swift" -o "$RADIO_BUILD_DIR/codex-lifetime-tests"
+"$RADIO_BUILD_DIR/codex-lifetime-tests"

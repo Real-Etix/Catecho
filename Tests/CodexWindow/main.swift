@@ -21,5 +21,8 @@ import Foundation
         print("PASS rolling chart bins preserve actual burst timestamps and zero activity")
         precondition(CodexUsageWindow.second.total(events, now: now.addingTimeInterval(61)).total == 0)
         print("PASS idle headline decays to zero without new records")
+        precondition(CodexUsageWindow.lifetime.total(events, now: now).total == 2310)
+        precondition(CodexUsageWindow.lifetime.bins(events, now: now) == hours)
+        print("PASS lifetime selection counts all supplied past events and keeps its chart explicitly recent")
     }
 }

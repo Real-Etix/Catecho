@@ -43,7 +43,7 @@ struct CodexEdgePreview: View {
             Text("Codex").font(.system(size: 10, weight: .medium, design: .serif))
             Spacer(minLength: 0)
             if !status.isEmpty { Image(systemName: status == "INDEXING" ? "clock" : "exclamationmark.triangle").font(.system(size: 8)).accessibilityHidden(true) }
-            Text(t(monitor.window == .second ? "SEC" : monitor.window == .minute ? "MIN" : "HR")).font(.system(size: 8, design: .monospaced))
+            Text(t(monitor.window.label)).font(.system(size: 8, design: .monospaced))
         }
     }
     private var screen: some View {

@@ -1,42 +1,37 @@
-# Verification · v0.7.0
+# Verification · v0.8.0
 
 Checked on an Apple Silicon Mac running macOS 15.5, 19 October 2026.
 
-## Automated tests and review
+## Automated checks and review
 
-`./test.sh` completed successfully with **286 PASS records** across parsing, model, interaction, placement, language, discovery, webpage, setup, login, Codex collection, rolling windows, monitor lifecycle, Zstandard decoding, streaming JSON projection, and session/title indexing programs.
+`./test.sh` completed successfully with **307 PASS records** and no failures. Existing source, setup, login, translation, placement, history decoder and rolling-window coverage remains in the suite.
 
-History checks cover plain/compressed duplicate suppression, concatenated frames, corrupt/truncated archives, decoder window and output limits, huge irrelevant bodies, oversized usage rows, misleading nested fields, malformed JSON, and bounded retained memory. Review identified decoder slots retained by unreadable files; a regression reproduced the issue, and the corrected collector releases those contexts and resumes other archives.
+The new lifetime suite checks records older than 24 hours, duplicate files, repeated polls, restart/replay idempotency, source removal, rolling expiry, new appends, future-record exclusion, child/parent separation, old-cache migration, corrupted storage, compressed old records, legacy/modern reconciliation, durable mixed-format warnings, ordinary paired notifications, explicit session limits and integer saturation. Monitor tests distinguish an unavailable selected chat from a real zero while preserving another chat's saved total; idle chats retain lifetime totals and the selection never falls back to all chats. Combined warnings are translated in both Chinese scripts.
 
-Chat checks cover independent totals, expiry/future boundaries, persistence, source-folder resets, missing selections without fallback, optional title metadata, partial appends, renames, replacement, oversized lines, and bounded index work. Placement checks cover the widened tucked window, both screen edges, negative coordinates, drag clamps, and inverse antenna mapping. Final review found an Escape-routing issue; the app now lets the chat picker handle Escape while it is open. Focused re-review found no further issues.
+Independent review identified mixed-history warning gaps and scope-specific unavailable/zero errors. Regression checks reproduced both before the fixes and passed afterward. A focused re-review approved the final implementation with no remaining actionable findings.
 
 The optional live-provider suite was not rerun for this feature. Six historical downloaded-feed checks remain excluded because their local fixtures are not in this repository.
 
-## Native checks
+## Native and live checks
 
-- An isolated sample preview uses separate preferences/cache and disables login-item operations. Classic and Flat compact displays were visually checked, including English and Traditional Chinese. Existing static render coverage includes all three languages.
-- The searchable chat selector filtered sample sessions. Selecting a chat changed the number, chart, input/output breakdown and tucked readout together. The selection survived appearance/language changes. Escape dismissed the picker while leaving the radio open in immediate interaction checks.
-- The installed app opened tucked with the new live readout. It read local usage without a partial-history warning and exposed the chat selector. Exported preferences before and after installation were identical. The app was left tucked with its original all-chat scope.
-- Native drag checks passed for no-op clicks, movement before release, final release coordinates, and a single placement commit. Tuck → reveal → tuck passed with a 190 × 126-point preview window and unchanged 374 × 416-point expanded footprint. Eight legacy edge/monitor geometry cases also passed.
-
-## History coverage and performance
-
-A controlled before/after replay at a fixed cutoff included 752 more compressed files. The unique events and 24-hour total were unchanged in that dataset: the added coverage did not invent extra usage. The false oversized-record and unsupported-Zstandard warnings were removed, with no previously counted event lost.
-
-A separate read-only live diagnostic processed about 1.79 GB in 271 bounded polls in **34.02 seconds** wall time (21.73 seconds user / 3.41 seconds system), with peak RSS about **43 MB**. The next idle poll read **0 bytes**. These are observations on one Mac, not performance guarantees.
+- Classic/English and Flat/Traditional Chinese TOTAL layouts were visually checked in an isolated sample app. The lifetime headline, input/output details, chat list and tucked antenna readout agreed. A sample chat with no recent activity retained its lifetime total while the explicitly labeled recent 24-hour chart remained empty.
+- The final native drag checks and tuck → reveal → tuck check passed. The compact window remains 190 × 126 points and the full radio remains 374 × 416 points. Eight edge/monitor geometry cases passed.
+- The installed app backfilled older plain/compressed local records into its lifetime ledger. A read-only database audit verified that every session aggregate matched the sum of its unique stored usage records. Older mixed-format histories retained visible partial-coverage warnings; the app does not promise exact usage for missing history.
+- Preferences immediately after installation exactly matched the previous version. TOTAL was then selected through the installed UI; a second comparison found changes only to `codexWindow` and the antenna placement coordinates during live interaction. The installed radio was left tucked with its lifetime readout, original language, appearance, source choices and chat scope.
 
 ## Build and package
 
-`./build.sh` produced **0.7.0, build 18**. Both built and installed bundles passed strict ad-hoc signature verification, and their executables matched byte-for-byte. The previous installed app was retained locally for rollback. The app-only ZIP passed its integrity check and every packaged file matched the build; a SHA-256 checksum accompanies the download. The bundled Zstandard license matches the vendored license, and the executable has no external Homebrew dependency.
+`./build.sh` produced **0.8.0, build 19**. Built and installed bundles passed strict ad-hoc signature verification and their executables matched byte-for-byte. The previous installed app was retained locally for rollback. The app-only ZIP passed its integrity check and all five packaged files matched the tested build; a SHA-256 checksum accompanies the release.
 
-The shell build uses the repository's existing local overlay for a duplicate SwiftBridging module map in this Mac's Command Line Tools installation. Native tests require WindowServer access. A SwiftPM manifest/linker failure was also reproduced on the unchanged base manifest; SwiftPM validation remains unavailable on this toolchain. The shell build and full shell test suite passed.
+The executable uses macOS's SQLite library and the existing statically linked Zstandard decoder. It has no Homebrew runtime dependency. The repository's existing Command Line Tools overlay remains in use. The earlier SwiftPM manifest/linker limitation on this Mac's toolchain remains; verification used the shell build and test suite.
 
-## Remaining limitations
+## Limits
 
-- Local Codex log formats can change. Unsupported compression, corrupt archives, structural limits, unreadable files, mixed-schema reconciliation, missing cumulative baselines, and bounded-history limits can still produce incomplete totals; those conditions are surfaced.
-- Chat totals cover retained local activity from the last 24 hours, not lifetime conversations. Optional titles may be absent; those sessions use a short ID. Subagents remain separate local sessions.
-- Recorded bursts do not measure exact generation speed, subscription allowance, cost, or sessions on other machines/cloud workers. New nested session discovery can take roughly 15 seconds; optional titles refresh roughly every 30 seconds. Existing activity is polled about every second while visible and every five seconds while tucked.
-- Runtime checks used macOS 15.5; the deployment target remains macOS 14. Actual logout/login, sleep/wake, multiple physical displays, and a full VoiceOver pass remain outstanding.
-- Developer ID signing, notarization, Mac App Store submission, Intel builds, and automatic application updates are not included.
+- Lifetime means recorded local usage, with no age expiry. Deleted files never indexed by Catecho, unrecorded usage, unreliable cumulative baselines, unsupported/corrupt records and mixed-format omissions can leave gaps. Subagents are separate sessions.
+- The numeric SQLite ledger is capped at 10,000 sessions and 256 MiB with a 2 MiB page cache. A storage error or limit produces an unavailable lifetime display; recent collection can continue. The recent chart cache still retains up to 24 hours.
+- No prompts, conversation bodies or chat titles are written to the ledger. It stores numeric usage, opaque identifiers and timestamps. Optional title metadata stays in memory. Nothing is uploaded.
+- Counts do not measure exact generation speed, subscription allowance, monetary cost, or other computers/cloud workers.
+- Runtime checks used macOS 15.5; the deployment target remains macOS 14. Actual logout/login, sleep/wake, multiple physical displays and a full VoiceOver pass remain outstanding.
+- Developer ID signing, notarization, Mac App Store submission, Intel builds and automatic app updates are not included.
 
-The repository and release exclude personal preferences, numeric history, source logs, chat titles, caches, local backups, and development-session data. Published monitor imagery uses sample numbers.
+Published artifacts exclude personal preferences, numeric history, chat titles, source logs, local backups and development-session data. Published monitor imagery uses sample data.

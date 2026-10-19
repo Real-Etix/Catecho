@@ -43,6 +43,8 @@ struct LittleRadioApp {
                 model.appearance = appearance
                 model.codex.window = .second
                 renderNative(RadioView(model: model, previewLabel: "PREVIEW"), to: directory.appendingPathComponent("codex-\(appearance)-\(language.rawValue).png"))
+                model.codex.window = .lifetime
+                renderNative(RadioView(model: model, previewLabel: "PREVIEW"), to: directory.appendingPathComponent("codex-total-\(appearance)-\(language.rawValue).png"))
             }
         }
     }

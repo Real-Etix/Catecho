@@ -5,6 +5,10 @@ struct CodexSessionSummary: Identifiable, Sendable {
     let lastRecordedAt: Date
     let usage: CodexTokenUsage
 
+    static func combinedUsage(_ sessions: [CodexSessionSummary]) -> CodexTokenUsage {
+        CodexTokenUsage(input: sessions.reduce(0) { CodexUsageWindow.add($0, $1.usage.input) }, cachedInput: sessions.reduce(0) { CodexUsageWindow.add($0, $1.usage.cachedInput) }, output: sessions.reduce(0) { CodexUsageWindow.add($0, $1.usage.output) }, reasoning: sessions.reduce(0) { CodexUsageWindow.add($0, $1.usage.reasoning) })
+    }
+
     static func filter(_ events: [CodexUsageEvent], sessionID: String?) -> [CodexUsageEvent] {
         guard let sessionID else { return events }
         return events.filter { $0.sessionID == sessionID }

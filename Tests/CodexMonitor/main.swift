@@ -27,12 +27,26 @@ import SwiftUI
         await wait { monitor.snapshot != nil }
         precondition(monitor.enabled && monitor.snapshot?.issue == .noLogs)
         print("PASS finishing setup starts local collection for an enabled station")
+        let stamp = ISO8601DateFormatter().string(from: Date().addingTimeInterval(-10))
+        let log = "{\"type\":\"session_meta\",\"timestamp\":\"\(stamp)\",\"payload\":{\"id\":\"saved-chat\"}}\n{\"type\":\"token_usage_record\",\"timestamp\":\"\(stamp)\",\"payload\":{\"response_id\":\"saved-response\",\"thread_id\":\"saved-chat\",\"usage\":{\"input_tokens\":100,\"output_tokens\":10}}}\n"
+        try Data(log.utf8).write(to: root.appendingPathComponent("sessions/saved.jsonl"))
+        monitor.refresh()
+        await wait { monitor.snapshot?.lifetimeSessions?.contains(where: { $0.id == "saved-chat" }) == true }
+        try FileManager.default.removeItem(at: root)
+        monitor.selectSession("not-recorded")
+        monitor.window = .lifetime
+        monitor.refresh()
+        await wait { monitor.snapshot?.issue == .missingFolder }
+        precondition(monitor.reading(now: Date()) == "—", "Missing selected history must not become zero when another chat has saved totals")
+        monitor.selectSession("saved-chat")
+        precondition(monitor.reading(now: Date()) == "110")
+        print("PASS unavailable sources preserve saved selected totals and distinguish unknown chats from zero")
         monitor.window = .hour; monitor.step(1)
-        precondition(monitor.window == .second)
+        precondition(monitor.window == .lifetime)
         monitor.selectSession("specific-chat")
         monitor.showEdgePreview = false
         let second = CodexMonitorModel(preferences: preferences, historyDirectory: directory)
-        precondition(second.window == .second && second.rootDirectory.path == root.path && second.selectedSessionID == "specific-chat" && !second.showEdgePreview)
+        precondition(second.window == .lifetime && second.rootDirectory.path == root.path && second.selectedSessionID == "specific-chat" && !second.showEdgePreview)
         monitor.setRoot(directory.appendingPathComponent("missing"))
         precondition(monitor.snapshot == nil && monitor.selectedSessionID == nil && monitor.sessionNames.isEmpty)
         await wait { monitor.snapshot?.issue == .missingFolder }
@@ -40,7 +54,16 @@ import SwiftUI
         print("PASS source changes invalidate the old reading and persist folder/window choices")
         let sample = CodexMonitorModel(preferences: preferences, historyDirectory: directory, simulated: true)
         let choices = sample.sessions(now: Date())
-        precondition(choices.count == 2)
+        precondition(choices.count == 3)
+        sample.window = .lifetime
+        sample.selectSession("preview-old")
+        let oldTotal = sample.usage(now: Date()).total
+        precondition(oldTotal > 0 && sample.scopedEvents.isEmpty)
+        precondition(sample.usage(now: Date().addingTimeInterval(200_000)).total == oldTotal)
+        sample.selectSession("not-recorded")
+        precondition(sample.usage(now: Date()).total == 0)
+        sample.window = .hour
+        print("PASS lifetime retains idle chats, persists time selection and never falls back to other chats")
         sample.selectSession(choices[0].id)
         precondition(!sample.scopedEvents.isEmpty && sample.scopedEvents.allSatisfy { $0.sessionID == choices[0].id })
         sample.selectSession("expired-chat")

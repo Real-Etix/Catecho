@@ -24,4 +24,5 @@ struct CodexUsageSnapshot: Sendable {
     let issue: CodexUsageIssue?
     let warning: String?
     let bytesRead: Int
+    var lifetimeSessions: [CodexSessionSummary]? = nil
 }

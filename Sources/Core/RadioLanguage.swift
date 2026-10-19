@@ -37,6 +37,8 @@ enum RadioLanguage: String, CaseIterable {
         }
     }
     private static let diagnosticFragments = [
+        "Earlier cumulative usage has no reliable baseline; lifetime history may be incomplete.",
+        "Lifetime storage is unavailable or reached its limit. Recent activity can still be shown.",
         "Incomplete rollout lines exceeded the memory limit; history is partial.",
         "Unsupported rollout compression was skipped; history is partial.",
         "The rollout inventory exceeded the local file limit; history is partial.",
@@ -70,6 +72,15 @@ enum RadioLanguage: String, CaseIterable {
     ]
     static let strings: [String: (String, String)] = [
         "All chats": ("所有对话", "所有對話"),
+        "Chats · lifetime": ("对话 · 累计用量", "對話 · 累計用量"),
+        "TOTAL": ("累计", "累計"),
+        "Lifetime · available local records": ("累计用量 · 根据现有本机记录", "累計用量 · 根據現有本機記錄"),
+        "Lifetime total unavailable": ("累计用量暂不可用", "累計用量暫時無法使用"),
+        "Recent activity · 24h": ("近期活动 · 24 小时", "近期活動 · 24 小時"),
+        "Lifetime includes available local records. Deleted or unrecorded usage cannot be recovered.": ("累计用量包含可读取的本机记录。已删除或从未记录的用量无法恢复。", "累計用量包含可讀取的本機記錄。已刪除或從未記錄的用量無法還原。"),
+        "Indexing earlier records… Totals are still updating.": ("正在索引早期记录…累计用量仍在更新。", "正在索引早期記錄…累計用量仍在更新。"),
+        "Earlier cumulative usage has no reliable baseline; lifetime history may be incomplete.": ("早期累计用量缺少可靠基准，总用量可能不完整。", "早期累計用量缺少可靠基準，總用量可能不完整。"),
+        "Lifetime storage is unavailable or reached its limit. Recent activity can still be shown.": ("累计用量储存不可用或已达上限，仍可查看近期用量。", "累計用量儲存無法使用或已達上限，仍可查看近期用量。"),
         "Session": ("会话", "工作階段"),
         "Choose chat": ("选择对话", "選擇對話"),
         "Chats · last 24 hours": ("对话 · 过去 24 小时", "對話 · 過去 24 小時"),
