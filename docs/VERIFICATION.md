@@ -1,29 +1,36 @@
-# Verification · v0.4.11
+# Verification · v0.5.0
 
 Checked on an Apple Silicon Mac running macOS 15.5, 19 October 2026.
 
 ## Automated tests
 
-`./test.sh` completed successfully from this repository with **132 PASS records** across the core, model, interaction, placement, language, discovery, discovery-model, and webpage test programs.
+`./test.sh` completed successfully with **194 PASS records** across the core, model, interaction, placement, language, discovery, discovery-model, webpage, setup, and login-adapter test programs.
 
-The suite covers source parsing, safe links, absent metadata, source interleaving, cached editions, configuration persistence, cancellation, refresh coordination, custom website discovery, translation-cache separation, antenna gestures, radio turns, and placement geometry. Six optional historical downloaded-feed checks are not included because their local development fixtures are not part of this repository. No live provider run was performed for this packaging release.
+The new setup checks cover first launch, interrupted setup, upgrade migration from all persisted preferences and valid cached editions, validation, completion persistence, language and research choices, fetch gating, selected-station warmup, replay, and skip. Migration regressions were reproduced before fixing them. The login adapter's 29 checks inject OS operations to verify enabled, disabled, pending approval, failure, retry, and installation-location states without changing real login items.
+
+Six optional historical downloaded-feed checks are excluded because their local fixtures are not in this repository. This release did not run the full optional live-provider suite.
+
+## Native interaction checks
+
+A separately identified app with isolated preferences/cache was used for setup interaction checks. Its login operations were disabled.
+
+- Classic and Flat retain the 374 × 416-point footprint. All three steps were inspected in English, with Simplified and Traditional Chinese language previews also checked.
+- Topic switches, expandable research subjects, empty-selection validation, Back, Continue, Start reading, and skip worked. Return advances and Escape goes back; an initial Escape issue was reproduced and corrected with the Back button's native cancel shortcut.
+- Finishing preserved the selected AI/research stations, physics subjects, and language. Live fetching showed the existing radio-wave loading state and produced a cached edition. Relaunch began tucked and did not repeat setup.
+- The installed app migrated without showing setup. Every pre-existing preference matched its saved pre-update value. Its real macOS login status was displayed as enabled; this check did not toggle the user's existing registration.
+- The final executable passed eight geometry cases and native drag/floating-panel/tuck → reveal → tuck diagnostics.
 
 ## Build and release package
 
-- A fresh `./build.sh` completed successfully and produced `dist/Catecho.app`, version 0.4.11, build 15, with the radio icon declared in its bundle metadata.
-- `codesign --verify --deep --strict` passed for the ad-hoc signature.
-- The built executable passed eight desktop edge/monitor geometry cases and the native smoke diagnostics for drag tracking, floating-window properties, and tuck → reveal → tuck.
-- The app-only ZIP passed its integrity check. All four bundle files match the fresh build byte-for-byte, and a SHA-256 checksum accompanies the download.
+`./build.sh` produced version **0.5.0, build 16**, using whole-module release optimization and ServiceManagement. Strict ad-hoc signature verification passed for both the built and installed bundles. The installed executable matched the build byte-for-byte.
 
-## Scope
-
-The Swift sources, tests, and artwork match the previously installed v0.4.11 prototype. This repository preparation changes the build output to `dist/Catecho.app` and adds public documentation and sample screenshots. It does not change runtime behavior.
-
-The repository excludes local preferences, source caches, build caches, historical app backups, and development-session screenshots. The two included radio screenshots are sample editions. The app icon was previously inspected at small and large sizes in Finder.
+The app-only ZIP passed its integrity check, and all bundle files matched the fresh build. A SHA-256 checksum accompanies the download.
 
 ## Remaining limitations
 
-- The minimum deployment target is macOS 14, but this release's checks ran on macOS 15.5. Runtime testing on macOS 14 and other Mac hardware remains outstanding.
-- Broader full-screen Spaces, multiple physical monitors, sleep/wake, and VoiceOver testing remains outstanding.
-- The build is locally ad-hoc signed. Developer ID signing, notarization, and Mac App Store submission are not completed.
-- Public feeds and website interfaces can change or fail. Automated deterministic tests do not establish current availability of every provider.
+- The minimum deployment target is macOS 14; runtime checks here used macOS 15.5.
+- Actual logout/login, sleep/wake, broader full-screen Spaces, multiple physical displays, and a complete VoiceOver pass remain outstanding. Login approval and failure paths were exercised through injected OS responses.
+- Developer ID signing, notarization, Mac App Store submission, Intel builds, and automatic app updates are not included.
+- Public sources may change or fail. Deterministic tests do not establish every provider's current availability.
+
+The repository excludes personal preferences, source caches, build caches, local app backups, and development-session data. The setup screenshot shows an isolated test profile.

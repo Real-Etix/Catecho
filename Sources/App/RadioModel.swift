@@ -24,6 +24,7 @@ final class RadioModel: ObservableObject {
     @Published var positions: [RadioChannel: Int] = [:]
     @Published var isExpanded = false
     @Published var settingsOpen = false
+    @Published private(set) var setupOpen = false
     @Published var cacheWarning: String?
     var onPlacementChange: (() -> Void)?
     var onTuck: (() -> Void)?
@@ -36,9 +37,9 @@ final class RadioModel: ObservableObject {
     private var requestIDs: [RadioChannel: UUID] = [:]
     private var lastAttempts: [RadioChannel: Date] = [:]
 
-    init(preview: Bool = false, fetcher: @escaping (RadioChannel, FeedConfiguration) async throws -> FeedBatch = { try await FeedService().fetch(channel: $0, configuration: $1) }) {
+    init(preview: Bool = false, preferences: UserDefaults? = nil, cacheDirectory: URL? = nil, fetcher: @escaping (RadioChannel, FeedConfiguration) async throws -> FeedBatch = { try await FeedService().fetch(channel: $0, configuration: $1) }) {
         self.fetcher = fetcher
-        defaults = preview ? UserDefaults(suiteName: "LittleRadio.Preview")! : .standard
+        defaults = preferences ?? (preview ? UserDefaults(suiteName: "LittleRadio.Preview")! : .standard)
         language = RadioLanguage(rawValue: defaults.string(forKey: "language") ?? "system") ?? .system
         translateArticles = defaults.object(forKey: "translateArticles") == nil ? true : defaults.bool(forKey: "translateArticles")
         appearance = defaults.string(forKey: "appearance") ?? "Classic"
@@ -50,11 +51,36 @@ final class RadioModel: ObservableObject {
         configuration = defaults.data(forKey: "stationConfiguration").flatMap { try? JSONDecoder().decode(FeedConfiguration.self, from: $0) }
             ?? FeedConfiguration(githubQuery: defaults.string(forKey: "githubQuery") ?? "stars:>10000", customFeedURL: defaults.string(forKey: "customFeedURL") ?? "")
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        cache = RadioCache(directory: preview ? FileManager.default.temporaryDirectory.appendingPathComponent("LittleRadioPreview") : support.appendingPathComponent("Little Radio/Cache"))
+        cache = RadioCache(directory: cacheDirectory ?? (preview ? FileManager.default.temporaryDirectory.appendingPathComponent("LittleRadioPreview") : support.appendingPathComponent("Little Radio/Cache")))
         if !preview {
             for c in channels { batches[c] = cache.load(channel: c, configuration: configuration) }
         }
+        let needsSetup = !preview && SetupLifecycle.shouldPresent(defaults, hasCachedEdition: !batches.isEmpty)
         if !channels.contains(channel) { channel = channels.first ?? .ai }
+        setupOpen = needsSetup
+    }
+
+    var hasCompletedSetup: Bool { defaults.bool(forKey: SetupLifecycle.completedKey) }
+    func beginSetup() {
+        guard !settingsOpen, !setupOpen else { return }
+        setupOpen = true
+        onReveal?()
+    }
+    func finishSetup(configuration candidate: FeedConfiguration, language choice: RadioLanguage) -> String? {
+        guard let error = saveConfiguration(candidate, refreshAfterSave: false) else {
+            // Unchanged default choices still need a persistent configuration on first use.
+            defaults.set(try? JSONEncoder().encode(configuration), forKey: "stationConfiguration")
+            language = choice
+            leaveSetup()
+            return nil
+        }
+        return error
+    }
+    func skipSetup() { leaveSetup() }
+    private func leaveSetup() {
+        SetupLifecycle.complete(defaults)
+        setupOpen = false
+        prepareEdition()
     }
 
     var channels: [RadioChannel] {
@@ -105,18 +131,20 @@ final class RadioModel: ObservableObject {
         positions[channel] = (currentIndex + direction + items.count) % items.count
     }
     func refreshIfNeeded() {
+        guard !setupOpen else { return }
         let stale = batches[channel].map { Date().timeIntervalSince($0.fetchedAt) > 900 } ?? true
         let recentAttempt = lastAttempts[channel].map { Date().timeIntervalSince($0) < 60 } ?? false
         if stale && !recentAttempt { refresh() }
     }
     func periodicRefresh(now: Date = Date()) {
-        guard refreshMinutes > 0 else { return }
+        guard !setupOpen, refreshMinutes > 0 else { return }
         for choice in channels {
             if dueAt(choice, now: now) <= now { refresh(choice) }
         }
     }
-    func prepareEdition() { for choice in channels { refresh(choice) } }
+    func prepareEdition() { guard !setupOpen else { return }; for choice in channels { refresh(choice) } }
     func refresh(_ target: RadioChannel? = nil) {
+        guard !setupOpen else { return }
         let target = target ?? channel
         guard !fetching.contains(target) else { return }
         let config = configuration
@@ -165,7 +193,7 @@ final class RadioModel: ObservableObject {
         return saveConfiguration(next)
     }
 
-    func saveConfiguration(_ candidate: FeedConfiguration) -> String? {
+    func saveConfiguration(_ candidate: FeedConfiguration, refreshAfterSave: Bool = true) -> String? {
         var next = candidate
         next.enabledChannels = StationCatalog.presets.filter { candidate.enabledChannels.contains($0.rawValue) }.map(\.rawValue)
         next.aiSourceIDs = StationCatalog.aiSources.filter { candidate.aiSourceIDs.contains($0.id) }.map(\.id)
@@ -206,7 +234,7 @@ final class RadioModel: ObservableObject {
         for c in channels { batches[c] = cache.load(channel: c, configuration: next) }
         failures.removeAll(); positions.removeAll(); lastAttempts.removeAll()
         if !channels.contains(channel) { channel = channels.first ?? .ai }
-        refresh()
+        if refreshAfterSave { refresh() }
         return nil
     }
     func openSource() {

@@ -7,8 +7,8 @@ final class RadioPanel: NSPanel {
 }
 
 @MainActor
-final class DesktopController: NSObject, NSApplicationDelegate {
-    private let model = RadioModel()
+final class DesktopController: NSObject, NSApplicationDelegate, NSMenuDelegate {
+    private let model: RadioModel
     private var panel: RadioPanel!
     private var statusItem: NSStatusItem!
     private var clickMonitor: Any?
@@ -16,9 +16,21 @@ final class DesktopController: NSObject, NSApplicationDelegate {
     private var timer: Timer?
     private var screenID: NSNumber?
     private var anchor = AntennaAnchor(x: 1, y: 0.5)
-    private let placementDefaults = UserDefaults.standard
+    private let placementDefaults: UserDefaults
     private var smokeTesting: Bool { CommandLine.arguments.contains("--smoke-test") }
 
+    override init() {
+        // Native interaction testing must never change the installed radio's data.
+        if CommandLine.arguments.contains("--setup-preview") {
+            let preferences = UserDefaults(suiteName: "Catecho.SetupPreview")!
+            placementDefaults = preferences
+            model = RadioModel(preferences: preferences, cacheDirectory: FileManager.default.temporaryDirectory.appendingPathComponent("CatechoSetupPreview"))
+        } else {
+            placementDefaults = .standard
+            model = RadioModel()
+        }
+        super.init()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -41,14 +53,20 @@ final class DesktopController: NSObject, NSApplicationDelegate {
         model.onPlacementChange = { [weak self] in self?.resetPlacement() }
         model.onLanguageChange = { [weak self] in self?.updateMenu() }
         createMenu()
-        tuck()
-        if CommandLine.arguments.contains("--show") { reveal() }
-        if !smokeTesting { model.prepareEdition() }
+        if model.setupOpen && !smokeTesting {
+            reveal()
+            NSApp.activate(ignoringOtherApps: true)
+        } else {
+            tuck()
+            if CommandLine.arguments.contains("--show") { reveal() }
+            if !smokeTesting { model.prepareEdition() }
+        }
         clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             Task { @MainActor in self?.handleOutsideClick() }
         }
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
             if event.keyCode == 53 {
+                if self?.model.setupOpen == true { return event }
                 if self?.model.settingsOpen == true { self?.model.settingsOpen = false }
                 else { self?.tuck() }
                 return nil
@@ -76,10 +94,17 @@ final class DesktopController: NSObject, NSApplicationDelegate {
         menu.addItem(withTitle: model.t("Open Catecho"), action: #selector(openFromMenu), keyEquivalent: "o").target = self
         menu.addItem(withTitle: model.t("Fetch latest edition"), action: #selector(refreshFromMenu), keyEquivalent: "r").target = self
         menu.addItem(withTitle: model.t("Move to this display"), action: #selector(moveToDisplay), keyEquivalent: "").target = self
+        let setup = menu.addItem(withTitle: model.t("Set up your radio…"), action: #selector(openSetup), keyEquivalent: "")
+        setup.target = self; setup.tag = 77
+        menu.delegate = self
         menu.addItem(.separator())
         menu.addItem(withTitle: model.t("Quit Catecho"), action: #selector(quit), keyEquivalent: "q").target = self
         statusItem.menu = menu
     }
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.item(withTag: 77)?.isEnabled = !model.settingsOpen && !model.setupOpen
+    }
+    @objc private func openSetup() { model.beginSetup() }
     private var screen: NSScreen {
         NSScreen.screens.first { ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber) == screenID } ?? NSScreen.main ?? NSScreen.screens[0]
     }
@@ -122,6 +147,11 @@ final class DesktopController: NSObject, NSApplicationDelegate {
     }
     func reveal() {
         guard panel != nil else { return }
+        if model.isExpanded && model.setupOpen {
+            panel.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
         model.isExpanded = true
         panel.contentView = NSHostingView(rootView: RadioView(model: model))
         position()
@@ -137,7 +167,7 @@ final class DesktopController: NSObject, NSApplicationDelegate {
         panel.orderFrontRegardless()
     }
     private func handleOutsideClick() {
-        guard model.isExpanded, !model.pinned else { return }
+        guard model.isExpanded, !model.pinned, !model.setupOpen else { return }
         let point = NSEvent.mouseLocation
         // Include popovers, which are separate windows belonging to this app.
         if NSApp.windows.contains(where: { $0.isVisible && $0.frame.contains(point) }) { return }

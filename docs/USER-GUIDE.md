@@ -1,5 +1,19 @@
 # Catecho user guide
 
+## First launch
+
+Copy Catecho to Applications and open it. A three-step tuning guide appears inside the radio:
+
+1. Switch on the topics you care about. Expand **Research subjects** to combine areas such as AI and physics. Keep at least one station enabled.
+2. Choose System default, English, 简体中文, or 繁體中文. The setup text previews your choice immediately.
+3. Optionally enable **Start at login**, then turn the dial labelled **Start reading**. Your choices are saved and every selected station begins fetching.
+
+**Back** revisits a step; **Use defaults** starts reading with the existing defaults. Topic and language drafts are committed only on completion. The login switch acts immediately through macOS, and skipping does not undo a deliberate login change. An interrupted first launch returns to setup next time. Existing users keep their settings and normal tucked startup after upgrading.
+
+Use the radio's menu-bar icon → **Set up your radio…** to revisit the guide. Finish or leave any open back-panel draft first. During setup, clicking outside does not dismiss it, and Escape goes back one step. Both Classic and Flat retain the same footprint and controls.
+
+**Start at login** also appears on the back. It uses Apple's login-item service and requires the app directly inside `/Applications` or your home `Applications` folder. If macOS needs approval, Catecho displays that state and provides **Open Login Items**. A registration failure remains visible without blocking reading. No login registration is made simply by opening or finishing setup.
+
 ## Controls
 
 - Drag the antenna’s cream base to reposition it. Pull the tip upward by 34 points and release to open; clicking the tip also opens it. A partial pull springs back.
@@ -61,4 +75,4 @@ Feed discovery follows the [RSS autodiscovery convention](https://www.rssboard.o
 Fetch pipeline: native `URLSession` → RSS/Atom, newsroom/Trending HTML or scoreboard JSON parser → optional topic/keyword filters → date ordering (or labelled webpage order), source interleaving and URL deduplication → up to 30 cached stories per station → selected 3/5/8 stories on the radio. Feed/API downloads use an ephemeral URLSession, 18-second request / 25-second resource timeouts, a 12 MB response limit, and HTTPS redirect checks. Different stations can fetch concurrently; selected sources within a station are fetched in sequence. Individual source failures are reported while successful sources remain usable; total failure retains the previous cached edition. JSON caches are written atomically and keyed by station configuration. Anthropic headlines without a publisher excerpt remain headline-only; no summary is fabricated.
 
 Local cache: `~/Library/Application Support/Little Radio/Cache`.
-Preferences use the `local.littleradio.desktop` UserDefaults domain, including the saved antenna position and display. The app does not register itself to open at login. To enable this, add Catecho in System Settings → General → Login Items & Extensions → Open at Login. Launch begins tucked and fetches the enabled stations. Quit from the menu bar when finished.
+Preferences use the `local.littleradio.desktop` UserDefaults domain, including the saved antenna position and display. Login startup is opt-in through **Start at login** in setup or back settings. After setup, launch begins tucked and fetches the enabled stations. Quit from the menu bar when finished.

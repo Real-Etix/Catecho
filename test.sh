@@ -20,3 +20,9 @@ swiftc "${RADIO_FLAGS[@]}" -parse-as-library "$RADIO_SOURCE_DIR"/Sources/Core/*.
 
 swiftc "${RADIO_FLAGS[@]}" -parse-as-library "$RADIO_SOURCE_DIR"/Sources/Core/*.swift "$RADIO_SOURCE_DIR/Tests/Webpage/main.swift" -o "$RADIO_BUILD_DIR/webpage-tests"
 "$RADIO_BUILD_DIR/webpage-tests" "$@"
+
+# First-run lifecycle, persisted setup and the operating-system login adapter.
+swiftc "${RADIO_FLAGS[@]}" -parse-as-library "$RADIO_SOURCE_DIR"/Sources/Core/*.swift "$RADIO_SOURCE_DIR/Sources/App/RadioModel.swift" "$RADIO_SOURCE_DIR/Tests/Setup/main.swift" -o "$RADIO_BUILD_DIR/setup-tests" -framework AppKit -framework SwiftUI
+"$RADIO_BUILD_DIR/setup-tests"
+swiftc "${RADIO_FLAGS[@]}" -parse-as-library "$RADIO_SOURCE_DIR/Sources/App/RadioLoginItem.swift" "$RADIO_SOURCE_DIR/Tests/Login/main.swift" -o "$RADIO_BUILD_DIR/login-tests" -framework ServiceManagement
+"$RADIO_BUILD_DIR/login-tests"

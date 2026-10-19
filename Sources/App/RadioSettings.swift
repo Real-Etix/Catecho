@@ -240,6 +240,8 @@ struct RadioSettings: View {
         }
     }
     @ViewBuilder private var radio: some View {
+        RadioLoginItemControl(classic: model.isClassic, language: model.language)
+        Divider()
         label("DISPLAY & RECEPTION")
         RadioDetentPicker(title: model.t("Appearance"), selection: $model.appearance, options: [("Classic", model.t("Classic")), ("Flat", model.t("Flat"))], classic: model.isClassic)
         RadioDetentPicker(title: model.t("Screen edge"), selection: $model.edge, options: [("Left", model.t("Left")), ("Right", model.t("Right"))], classic: model.isClassic)

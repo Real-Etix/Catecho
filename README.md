@@ -19,12 +19,15 @@ The screenshots show sample editions. The app fetches current information from t
 - Custom stations: paste website links to discover RSS/Atom feeds, with a public-webpage reader as a fallback.
 - A back panel with physical-style controls, a mouse-driven flip, and a battery compartment that shows update activity.
 - English, Simplified Chinese, and Traditional Chinese interfaces. On supported Macs, Apple's on-device Translation framework can translate article snippets while keeping an Original toggle.
+- A first-launch tuning guide for topics, research subjects, language, and optional start at login, using the radio's own physical-style controls.
 
 Built with SwiftUI and AppKit. No third-party package dependencies, app account, paid AI API, or cloud backend. Each Mac fetches its selected sources directly. Stories are publisher headlines and excerpts, not AI-written summaries.
 
 ## Try the beta
 
-Download the app-only ZIP from [Releases](https://github.com/Real-Etix/Catecho/releases), extract it, and copy **Catecho.app** to **Applications**. Launch it and look for the small antenna at the screen edge. A radio symbol in the menu bar also opens or quits it.
+Download the app-only ZIP from [Releases](https://github.com/Real-Etix/Catecho/releases), extract it, and copy **Catecho.app** to **Applications**. On first launch, choose topics, language, and whether to start at login. Click **Start reading** to fetch your stations. Later launches begin with the small antenna at the screen edge. A radio symbol in the menu bar opens or quits it and offers **Set up your radio…** to revisit setup.
+
+[Preview the first-launch setup](docs/images/setup-classic.png).
 
 Current requirements:
 
@@ -34,7 +37,7 @@ Current requirements:
 
 This is an early prototype. The downloadable build is ad-hoc signed and **not Developer ID signed or Apple-notarized**. Gatekeeper may block it on another Mac. A locally compiled build is an alternative for technical testers; a notarized distribution is planned separately. Intel and Windows builds are not included.
 
-For startup at login, add Catecho in **System Settings → General → Login Items & Extensions → Open at Login**. Updates run while the app is open and the Mac is awake. There is no automatic app updater yet; later builds are downloaded from Releases.
+Enable **Start at login** in setup or the radio's back settings after moving the app to Applications. Catecho reports macOS's actual status and links to Login Items if approval is needed. Updates run while the app is open and the Mac is awake. There is no automatic app updater yet; later builds are downloaded from Releases.
 
 [Read the user guide](docs/USER-GUIDE.md) for controls, sources, refresh behavior, translation, and custom stations.
 
@@ -56,7 +59,7 @@ The build script creates and ad-hoc signs `dist/Catecho.app`. An optional first 
 ## Tests
 
 ```sh
-./test.sh          # Deterministic parsing, model, language, interaction, and placement tests
+./test.sh          # Deterministic parsing, model, UI logic, setup, and login adapter tests
 ./test.sh --live   # Also contacts the public providers
 ```
 
@@ -65,9 +68,10 @@ Native diagnostics are available after building:
 ```sh
 dist/Catecho.app/Contents/MacOS/LittleRadio --geometry-test
 dist/Catecho.app/Contents/MacOS/LittleRadio --smoke-test
+dist/Catecho.app/Contents/MacOS/LittleRadio --setup-preview
 ```
 
-The smoke test briefly creates a native radio panel. See [verification notes](docs/VERIFICATION.md) for the checks performed on this release and remaining limitations.
+The smoke test briefly creates a native radio panel. Setup preview uses a separate `Catecho.SetupPreview` preferences domain and temporary cache; it preserves its test choices across launches and disables login-item operations. Keep the installed copy closed when testing a second bundle with the same identifier. See [verification notes](docs/VERIFICATION.md) for the checks performed on this release and remaining limitations.
 
 ## Project layout
 

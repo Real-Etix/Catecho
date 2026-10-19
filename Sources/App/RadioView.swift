@@ -13,6 +13,15 @@ struct RadioView: View {
     private var interacting: Bool { settling || dragStart != nil }
 
     var body: some View {
+        Group {
+            if model.setupOpen { RadioSetupView(model: model) }
+            else { radioBody }
+        }.onChange(of: model.setupOpen) { _, _ in
+            angle = 0; dragStart = nil; pendingAngle = nil; settling = false
+        }
+    }
+
+    private var radioBody: some View {
         RadioTurnStage(angle: angle, backShown: model.settingsOpen, interacting: interacting, classic: model.isClassic, reduceMotion: reduceMotion) {
             front
         } back: {
