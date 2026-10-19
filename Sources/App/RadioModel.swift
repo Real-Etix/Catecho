@@ -23,12 +23,18 @@ final class RadioModel: ObservableObject {
     @Published var fetching: Set<RadioChannel> = []
     @Published var positions: [RadioChannel: Int] = [:]
     @Published var isExpanded = false { didSet { syncCodex() } }
+    @Published var botExpanded = false
+    @Published var botRoomReserved = false
+    @Published var botOriginCorrection: CGFloat = 0
     @Published var settingsOpen = false { didSet { syncCodex() } }
     @Published private(set) var setupOpen = false { didSet { syncCodex() } }
     @Published var cacheWarning: String?
     var onPlacementChange: (() -> Void)?
     var onTuck: (() -> Void)?
     var onReveal: (() -> Void)?
+    var onBotExpansion: ((Bool) -> Void)?
+    var onBotDragBegan: (() -> Void)?
+    var onBotDragEnded: (() -> Void)?
     var onWindowDragFinished: (() -> Void)?
     let codex: CodexMonitorModel
     private let defaults: UserDefaults

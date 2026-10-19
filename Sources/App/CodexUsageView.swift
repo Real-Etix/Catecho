@@ -130,9 +130,9 @@ struct CodexMonitorSettings: View {
         VStack(alignment: .leading, spacing: 9) {
             MoldedPlasticText(text: t("CODEX · LOCAL ACTIVITY"), size: 10, classic: classic, tracking: 1)
             Text(t("All Codex sessions on this Mac")).font(.system(size: 11, weight: .medium))
-            Toggle(t("Token preview beside antenna"), isOn: $monitor.showEdgePreview)
+            Toggle(t("Token bot while tucked"), isOn: $monitor.showEdgePreview)
                 .font(.system(size: 11)).toggleStyle(RadioSlideSwitchStyle(classic: classic))
-            Text(t("Choose All chats or one chat on the Codex screen. The antenna preview follows that choice."))
+            Text(t("The bot follows your selected chat and time view."))
                 .font(.system(size: 10)).fixedSize(horizontal: false, vertical: true)
             Text(t("Lifetime includes available local records. Deleted or unrecorded usage cannot be recovered."))
                 .font(.system(size: 10)).fixedSize(horizontal: false, vertical: true)

@@ -5,6 +5,10 @@ import SwiftUI
 struct LittleRadioApp {
     @MainActor static func main() {
         let app = NSApplication.shared
+        if let index = CommandLine.arguments.firstIndex(of: "--render-bot"), CommandLine.arguments.count > index + 1 {
+            renderBot(to: URL(fileURLWithPath: CommandLine.arguments[index + 1]))
+            return
+        }
         if let index = CommandLine.arguments.firstIndex(of: "--render-codex"), CommandLine.arguments.count > index + 1 {
             renderCodex(to: URL(fileURLWithPath: CommandLine.arguments[index + 1]))
             return
@@ -28,6 +32,26 @@ struct LittleRadioApp {
         let delegate = DesktopController()
         app.delegate = delegate
         withExtendedLifetime(delegate) { app.run() }
+    }
+
+    @MainActor static func renderBot(to directory: URL) {
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let preferences = UserDefaults(suiteName: "Catecho.BotRender")!
+        let model = RadioModel(preview: true, preferences: preferences)
+        model.configuration.enabledChannels = ["codex"]
+        model.codex.window = .lifetime
+        model.codex.selectSession("preview-old")
+        for language in [RadioLanguage.english, .simplified, .traditional] {
+            for classic in [true, false] {
+                for progress in [0.0, 0.5, 1.0] {
+                    let content = TokenBotPose(progress: progress, left: false, classic: classic, monitor: model.codex, language: language, now: Date())
+                        .padding(20).background(Color(red: 0.96, green: 0.95, blue: 0.92)).preferredColorScheme(.light)
+                    let name = "bot-\(classic ? "Classic" : "Flat")-\(language.rawValue)-\(Int(progress * 100)).png"
+                    renderNative(content, to: directory.appendingPathComponent(name), size: CGSize(width: 344, height: 254))
+                    print("Rendered \(name)")
+                }
+            }
+        }
     }
 
     @MainActor static func renderCodex(to directory: URL) {
@@ -113,8 +137,8 @@ struct LittleRadioApp {
     }
 
     // Native scroll views and macOS controls are not drawn by SwiftUI ImageRenderer.
-    @MainActor private static func renderNative<Content: View>(_ content: Content, to url: URL) {
-        let frame = CGRect(x: -2000, y: -2000, width: 374, height: 416)
+    @MainActor private static func renderNative<Content: View>(_ content: Content, to url: URL, size: CGSize = CGSize(width: 374, height: 416)) {
+        let frame = CGRect(origin: CGPoint(x: -2000, y: -2000), size: size)
         let window = NSWindow(contentRect: frame, styleMask: .borderless, backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         window.isOpaque = false

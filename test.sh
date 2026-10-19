@@ -18,6 +18,8 @@ swiftc "${RADIO_FLAGS[@]}" "${RADIO_LINK_FLAGS[@]}" -parse-as-library "$RADIO_SO
 "$RADIO_BUILD_DIR/interaction-tests"
 swiftc "${RADIO_FLAGS[@]}" "${RADIO_LINK_FLAGS[@]}" -parse-as-library "$RADIO_SOURCE_DIR/Sources/App/RadioPlacement.swift" "$RADIO_SOURCE_DIR/Tests/Placement/main.swift" -o "$RADIO_BUILD_DIR/placement-tests"
 "$RADIO_BUILD_DIR/placement-tests"
+swiftc "${RADIO_FLAGS[@]}" -parse-as-library "$RADIO_SOURCE_DIR/Sources/Core/BotGeometry.swift" "$RADIO_SOURCE_DIR/Sources/App/RadioPlacement.swift" "$RADIO_SOURCE_DIR/Tests/Bot/main.swift" -o "$RADIO_BUILD_DIR/bot-tests"
+"$RADIO_BUILD_DIR/bot-tests"
 
 swiftc "${RADIO_FLAGS[@]}" "${RADIO_LINK_FLAGS[@]}" -parse-as-library "$RADIO_SOURCE_DIR"/Sources/Core/*.swift "$RADIO_SOURCE_DIR/Tests/Language/main.swift" -o "$RADIO_BUILD_DIR/language-tests"
 "$RADIO_BUILD_DIR/language-tests"

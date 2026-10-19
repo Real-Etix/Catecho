@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import Combine
 
 final class RadioPanel: NSPanel {
     override var canBecomeKey: Bool { true }
@@ -14,6 +15,10 @@ final class DesktopController: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var clickMonitor: Any?
     private var localMonitor: Any?
     private var timer: Timer?
+    private var botRetraction: Task<Void, Never>?
+    private var botDragging = false
+    private var botShrinkPending = false
+    private var previewObservation: AnyCancellable?
     private var screenID: NSNumber?
     private var anchor = AntennaAnchor(x: 1, y: 0.5)
     private let placementDefaults: UserDefaults
@@ -59,8 +64,21 @@ final class DesktopController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         model.onWindowDragFinished = { [weak self] in self?.windowDragFinished() }
         model.onTuck = { [weak self] in self?.tuck() }
         model.onReveal = { [weak self] in self?.reveal() }
+        model.onBotExpansion = { [weak self] in self?.setBotExpanded($0) }
+        model.onBotDragBegan = { [weak self] in self?.botDragging = true }
+        model.onBotDragEnded = { [weak self] in
+            guard let self else { return }
+            self.botDragging = false
+            if self.botShrinkPending { self.finishBotRetraction() }
+        }
         model.onPlacementChange = { [weak self] in self?.resetPlacement() }
         model.onLanguageChange = { [weak self] in self?.updateMenu() }
+        previewObservation = model.codex.$enabled.combineLatest(model.codex.$showEdgePreview)
+            .receive(on: RunLoop.main).sink { [weak self] _ in
+                guard let self, !self.model.isExpanded else { return }
+                if !self.showsCodexPreview { self.resetBot() }
+                self.position()
+            }
         createMenu()
         if model.setupOpen && !smokeTesting {
             reveal()
@@ -77,7 +95,8 @@ final class DesktopController: NSObject, NSApplicationDelegate, NSMenuDelegate {
             if event.keyCode == 53 {
                 if self?.model.codex.isChatPickerPresented == true { return event }
                 if self?.model.setupOpen == true { return event }
-                if self?.model.settingsOpen == true { self?.model.settingsOpen = false }
+                if self?.model.botExpanded == true && self?.model.isExpanded == false { self?.setBotExpanded(false) }
+                else if self?.model.settingsOpen == true { self?.model.settingsOpen = false }
                 else { self?.tuck() }
                 return nil
             }
@@ -140,8 +159,13 @@ final class DesktopController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard panel != nil else { return }
         let visible = screen.visibleFrame
         let left = model.edge == "Left"
-        let tucked = RadioPlacement.tuckedFrame(anchor: anchor.frame(visible: visible), visible: visible, left: left, preview: showsCodexPreview)
-        let antenna = RadioPlacement.antennaFrame(tucked: tucked, visible: visible, left: left, preview: showsCodexPreview)
+        model.botOriginCorrection = model.botRoomReserved ? BotGeometry.reservationOffset(anchor: anchor.frame(visible: visible), visible: visible, left: left) : 0
+        let tucked = showsCodexPreview
+            ? BotGeometry.windowFrame(anchor: anchor.frame(visible: visible), visible: visible, left: left, expanded: model.botRoomReserved)
+            : RadioPlacement.tuckedFrame(anchor: anchor.frame(visible: visible), visible: visible, left: left, preview: false)
+        let antenna = showsCodexPreview
+            ? BotGeometry.anchorFrame(window: tucked, visible: visible, left: left)
+            : RadioPlacement.antennaFrame(tucked: tucked, visible: visible, left: left, preview: false)
         let frame = model.isExpanded ? RadioPlacement.expandedFrame(anchor: antenna, visible: visible, left: left) : tucked
         panel.setFrame(frame, display: true)
     }
@@ -154,7 +178,10 @@ final class DesktopController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         screenID = target.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber
         let moved = RadioPlacement.clamp(panel.frame, visible: target.visibleFrame)
         panel.setFrame(moved, display: true)
-        let antenna = model.isExpanded ? RadioPlacement.antennaFrame(expanded: moved, visible: target.visibleFrame, left: model.edge == "Left") : RadioPlacement.antennaFrame(tucked: moved, visible: target.visibleFrame, left: model.edge == "Left", preview: showsCodexPreview)
+        let antenna: CGRect
+        if model.isExpanded { antenna = RadioPlacement.antennaFrame(expanded: moved, visible: target.visibleFrame, left: model.edge == "Left") }
+        else if showsCodexPreview { antenna = BotGeometry.anchorFrame(window: moved, visible: target.visibleFrame, left: model.edge == "Left", reservedCorrection: model.botRoomReserved ? model.botOriginCorrection : 0) }
+        else { antenna = RadioPlacement.antennaFrame(tucked: moved, visible: target.visibleFrame, left: model.edge == "Left", preview: false) }
         anchor = AntennaAnchor(frame: antenna, visible: target.visibleFrame)
         savePlacement()
     }
@@ -165,19 +192,62 @@ final class DesktopController: NSObject, NSApplicationDelegate, NSMenuDelegate {
             NSApp.activate(ignoringOtherApps: true)
             return
         }
+        resetBot()
         model.isExpanded = true
-        panel.contentView = NSHostingView(rootView: RadioView(model: model))
+        let host = NSHostingView(rootView: RadioView(model: model))
+        host.sizingOptions = [] // The controller owns this borderless window's frame.
+        panel.contentView = host
         position()
         panel.makeKeyAndOrderFront(nil)
         if !smokeTesting { model.refreshIfNeeded() }
     }
     func tuck() {
         guard panel != nil else { return }
+        resetBot()
         model.settingsOpen = false
         model.isExpanded = false
-        panel.contentView = NSHostingView(rootView: EdgeTab(model: model))
+        let host = NSHostingView(rootView: EdgeTab(model: model))
+        host.sizingOptions = []
+        panel.contentView = host
         position()
         panel.orderFrontRegardless()
+    }
+    private func resetBot() {
+        botRetraction?.cancel(); botRetraction = nil
+        botDragging = false; botShrinkPending = false
+        model.botExpanded = false
+        model.botRoomReserved = false
+    }
+    private func setBotExpanded(_ expanded: Bool, animated: Bool = true) {
+        guard !model.isExpanded, showsCodexPreview else { return }
+        botRetraction?.cancel(); botRetraction = nil
+        botShrinkPending = false
+        if expanded {
+            if !model.botRoomReserved {
+                model.botRoomReserved = true
+                position()
+            }
+            model.botExpanded = true
+            panel.makeKeyAndOrderFront(nil)
+        } else {
+            model.botExpanded = false
+            if !animated || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+                finishBotRetraction()
+            } else {
+                botRetraction = Task { [weak self] in
+                    try? await Task.sleep(for: .seconds(BotGeometry.duration + 0.04))
+                    guard !Task.isCancelled, let self, !self.model.isExpanded, !self.model.botExpanded else { return }
+                    self.finishBotRetraction()
+                }
+            }
+        }
+    }
+    private func finishBotRetraction() {
+        guard !model.isExpanded, !model.botExpanded else { return }
+        guard !botDragging else { botShrinkPending = true; return }
+        botShrinkPending = false
+        model.botRoomReserved = false
+        position()
     }
     private func handleOutsideClick() {
         guard model.isExpanded, !model.pinned, !model.setupOpen else { return }
@@ -201,23 +271,42 @@ final class DesktopController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if let clickMonitor { NSEvent.removeMonitor(clickMonitor) }
         if let localMonitor { NSEvent.removeMonitor(localMonitor) }
         timer?.invalidate()
+        botRetraction?.cancel()
+        previewObservation?.cancel()
         NotificationCenter.default.removeObserver(self)
         NSWorkspace.shared.notificationCenter.removeObserver(self)
+    }
+    private func smokeCheck(_ condition: @autoclosure () -> Bool, _ message: String = "", line: UInt = #line) {
+        guard condition() else {
+            let diagnostic = "FAIL native smoke line \(line): \(message); frame=\(panel.frame), reserved=\(model.botRoomReserved), expanded=\(model.botExpanded)\n"
+            FileHandle.standardError.write(Data(diagnostic.utf8))
+            fatalError(diagnostic)
+        }
     }
     private func runWindowSmokeTest() {
         verifyDragTracking()
         tuck()
         let collapsed = panel.frame
-        precondition(collapsed.width == (showsCodexPreview ? 190 : 54) && collapsed.height == 126)
-        precondition(screen.visibleFrame.contains(collapsed))
-        precondition(panel.level.rawValue > NSWindow.Level.normal.rawValue)
-        precondition(!panel.hidesOnDeactivate)
+        smokeCheck(collapsed.width == (showsCodexPreview ? BotGeometry.compactWidth : 54) && collapsed.height == (showsCodexPreview ? BotGeometry.height : 126))
+        smokeCheck(screen.visibleFrame.contains(collapsed))
+        smokeCheck(panel.level.rawValue > NSWindow.Level.normal.rawValue)
+        smokeCheck(!panel.hidesOnDeactivate)
+        if showsCodexPreview {
+            setBotExpanded(true, animated: false)
+            smokeCheck(panel.frame.width == BotGeometry.fullWidth && screen.visibleFrame.contains(panel.frame))
+            model.onBotDragBegan?()
+            setBotExpanded(false, animated: false)
+            smokeCheck(panel.frame.width == BotGeometry.fullWidth, "Retraction must not resize during base tracking")
+            model.onBotDragEnded?()
+            smokeCheck(panel.frame == collapsed, "Compact frame must return to \(collapsed)")
+            setBotExpanded(true, animated: false)
+        }
         reveal()
         let expanded = panel.frame
-        precondition(expanded.width == 374 && expanded.height == 416)
-        precondition(screen.visibleFrame.contains(expanded))
+        smokeCheck(expanded.width == 374 && expanded.height == 416)
+        smokeCheck(screen.visibleFrame.contains(expanded))
         tuck()
-        precondition(panel.frame == collapsed)
+        smokeCheck(panel.frame == collapsed)
         print("PASS native panel tuck → reveal → tuck: \(collapsed) / \(expanded)")
         NSApp.terminate(nil)
     }
@@ -232,13 +321,13 @@ final class DesktopController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         handle.mouseDown(with: event(.leftMouseDown, 20, 20))
         handle.mouseUp(with: event(.leftMouseUp, 20, 20))
-        precondition(commits == 0 && testWindow.frame.origin == CGPoint(x: 100, y: 100))
+        smokeCheck(commits == 0 && testWindow.frame.origin == CGPoint(x: 100, y: 100))
         handle.mouseDown(with: event(.leftMouseDown, 20, 20))
         handle.mouseDragged(with: event(.leftMouseDragged, 35, 70))
-        precondition(commits == 0 && testWindow.frame.origin == CGPoint(x: 115, y: 150))
+        smokeCheck(commits == 0 && testWindow.frame.origin == CGPoint(x: 115, y: 150))
         // Release five points farther than the last drag event, in the moved window.
         handle.mouseUp(with: event(.leftMouseUp, 25, 25))
-        precondition(commits == 1 && testWindow.frame.origin == CGPoint(x: 120, y: 155))
+        smokeCheck(commits == 1 && testWindow.frame.origin == CGPoint(x: 120, y: 155))
         print("PASS native drag: no-op click, movement before release, final release coordinate, single commit")
     }
 }

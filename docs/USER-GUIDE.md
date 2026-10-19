@@ -16,6 +16,7 @@ Use the radio's menu-bar icon → **Set up your radio…** to revisit the guide.
 
 ## Controls
 
+- With Codex monitoring and **Token bot while tucked** enabled, a cream bot replaces the plain antenna. Its belly keeps the selected chat/time reading visible. Click the belly or either white glove to extend/retract the dashboard; pull a glove outward to open or inward to close. Escape retracts the open dashboard. The vertical antenna on the top of its head opens the full Codex radio. Drag its lower base to move it. The window grows toward the screen interior, then releases the extra space when retracted. Classic and Flat share the same movement; Reduce Motion switches directly between poses.
 - Drag the antenna’s cream base to reposition it. Pull the tip upward by 34 points and release to open; clicking the tip also opens it. A partial pull springs back.
 - Drag the opened radio by its title area. Position and display are remembered; opening and tucking keep the radio within the display’s usable area.
 - The radio floats above ordinary application windows and **Keep open while I work** defaults on. Click the down chevron or press Escape to tuck it away. If you turn keep-open off, clicking another app also tucks it.

@@ -12,14 +12,14 @@ The screenshots show sample editions. The app fetches current information from t
 
 ## What it does
 
-- A draggable edge antenna, a floating radio window, and matching Classic and Flat appearances.
+- A draggable edge antenna, a floating radio window, and matching Classic and Flat appearances. With Codex enabled, a small bot keeps the antenna on its head and extends its token screen with white-gloved telescopic arms.
 - A small, finite edition with source links, refresh status, and an offline cache.
 - AI news, GitHub trends, research, games, NBA, education, psychology, philosophy, science, and technology stations.
 - Multiple research topics at once, including AI and physics. GitHub shows recent star gains from Trending rather than lifetime-star rankings.
 - Custom stations: paste website links to discover RSS/Atom feeds, with a public-webpage reader as a fallback.
 - A back panel with physical-style controls, a mouse-driven flip, and a battery compartment that shows update activity.
 - English, Simplified Chinese, and Traditional Chinese interfaces. On supported Macs, Apple's on-device Translation framework can translate article snippets while keeping an Original toggle.
-- An optional Codex station for all local sessions or one selected chat: lifetime recorded token totals plus second/minute/hour activity views, with a recent activity chart, a tucked antenna readout, and numeric-only local storage.
+- An optional Codex station for all local sessions or one selected chat: lifetime recorded token totals plus second/minute/hour activity views, with a recent activity chart, a tucked bot readout, and numeric-only local storage.
 - A first-launch tuning guide for topics, research subjects, language, and optional start at login, using the radio's own physical-style controls.
 
 Built with SwiftUI and AppKit. No app account, paid AI API, or cloud backend. A small [BSD-licensed Zstandard decoder](Vendor/Zstd/README.md) is bundled for compressed local Codex history; no extra installation is needed. Each Mac fetches its selected sources directly. Stories are publisher headlines and excerpts, not AI-written summaries.
@@ -73,6 +73,7 @@ dist/Catecho.app/Contents/MacOS/LittleRadio --geometry-test
 dist/Catecho.app/Contents/MacOS/LittleRadio --smoke-test
 dist/Catecho.app/Contents/MacOS/LittleRadio --setup-preview
 dist/Catecho.app/Contents/MacOS/LittleRadio --codex-preview --show
+dist/Catecho.app/Contents/MacOS/LittleRadio --render-bot /tmp/catecho-bot-previews
 ```
 
 The smoke test briefly creates a native radio panel. Setup preview uses a separate `Catecho.SetupPreview` preferences domain and temporary cache; it preserves its test choices across launches and disables login-item operations. Codex preview uses a separate `Catecho.CodexPreview` domain and sample activity; `--codex-live-preview --show` reads real local usage into a temporary numeric cache. Both disable login-item operations. Keep the installed copy closed when testing a second bundle with the same identifier. See [verification notes](docs/VERIFICATION.md) for the checks performed on this release and remaining limitations.

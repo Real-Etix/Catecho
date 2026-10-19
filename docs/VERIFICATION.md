@@ -1,4 +1,21 @@
-# Verification · v0.8.0
+# Verification · v0.9.0
+
+Checked on 19 October 2026 with the native macOS build.
+
+- The full offline suite passed with 308 PASS records. Focused bot checks also pass after the final placement fixes: both edges, off-origin displays, 202 attached-hand poses, gesture directions, reservation/release continuity, and dragging an expanded bot before closing.
+- Native smoke checks pass for base dragging, compact → extended belly → compact, deferred resize during base tracking, and bot → full radio → bot. Compact and extended bot windows are 172 × 214 and 304 × 214 points.
+- Classic and Flat were rendered in English, Simplified Chinese and Traditional Chinese at compact, intermediate and extended poses. The renderer uses a native hosting window so the AppKit drag region is represented correctly. Intermediate text fits the changing screen width.
+- An isolated sample app was exercised with belly and glove clicks, inward and outward glove pulls (including a pull ending inside the glove), Escape, top-antenna reveal and return from the full radio. The sample’s 4.1M lifetime reading agreed with its full-radio reading.
+- Native verification also caught a one-point frame shift caused by automatic hosting-view sizing. The controller now owns the window size exclusively, and the exact frame roundtrip check passes.
+- Independent review found and verified fixes for opposite-edge jumps, retraction during base dragging, and the combination of expanded dragging and closing. No actionable findings remain.
+- The installed app was exercised with live local tokens in Traditional Chinese. Its belly expanded and retracted correctly and its recorded total continued updating. All saved preference values exactly matched the pre-update export. The previous bundle was retained for rollback.
+- Build: 0.9.0, build 20. Strict ad-hoc signature verification passed. No changes to token accounting, network fetching, stored preferences or login registration are required by this feature.
+
+Reduce Motion takes the direct state-change path in SwiftUI and the native controller; the system-wide preference was not changed during verification. Live provider tests were not repeated because source fetching is unchanged.
+
+---
+
+## Previous verification · v0.8.0
 
 Checked on an Apple Silicon Mac running macOS 15.5, 19 October 2026.
 

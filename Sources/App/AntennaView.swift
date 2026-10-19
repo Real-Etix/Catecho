@@ -4,18 +4,23 @@ import SwiftUI
 /// A native drag region keeps window motion independent of SwiftUI view layout.
 struct WindowDragHandle: NSViewRepresentable {
     var hint: String = "Drag to move Catecho"
+    var onStarted: (() -> Void)? = nil
+    var onEnded: (() -> Void)? = nil
     let onFinished: () -> Void
     func makeNSView(context: Context) -> WindowDragHandleView {
         let view = WindowDragHandleView()
         view.onFinished = onFinished
+        view.onStarted = onStarted; view.onEnded = onEnded
         view.toolTip = hint
         return view
     }
-    func updateNSView(_ view: WindowDragHandleView, context: Context) { view.onFinished = onFinished; view.toolTip = hint }
+    func updateNSView(_ view: WindowDragHandleView, context: Context) { view.onFinished = onFinished; view.onStarted = onStarted; view.onEnded = onEnded; view.toolTip = hint }
 }
 
 final class WindowDragHandleView: NSView {
     var onFinished: (() -> Void)?
+    var onStarted: (() -> Void)?
+    var onEnded: (() -> Void)?
     private var dragOrigin: CGPoint?
     private var pointerOrigin: CGPoint?
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
@@ -25,6 +30,7 @@ final class WindowDragHandleView: NSView {
         guard let window else { return }
         dragOrigin = window.frame.origin
         pointerOrigin = window.convertPoint(toScreen: event.locationInWindow)
+        onStarted?()
     }
     override func mouseDragged(with event: NSEvent) {
         guard let window, let dragOrigin, let pointerOrigin else { return }
@@ -33,7 +39,7 @@ final class WindowDragHandleView: NSView {
                                       y: dragOrigin.y + pointer.y - pointerOrigin.y))
     }
     override func mouseUp(with event: NSEvent) {
-        defer { dragOrigin = nil; pointerOrigin = nil }
+        defer { dragOrigin = nil; pointerOrigin = nil; onEnded?() }
         guard let window, let dragOrigin else { return }
         mouseDragged(with: event)
         // Commit only at release; a header click must preserve the original tuck anchor.
@@ -85,18 +91,12 @@ struct EdgeTab: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     init(model: RadioModel) { self.model = model; monitor = model.codex }
     var body: some View {
-        HStack(alignment: .bottom, spacing: 4) {
-            if showPreview && model.edge != "Left" { preview }
-            antenna
-            if showPreview && model.edge == "Left" { preview }
-        }.frame(width: showPreview ? 190 : 54, height: 126).preferredColorScheme(.light)
+        Group {
+            if showPreview { TokenBotView(model: model) }
+            else { antenna }
+        }.preferredColorScheme(.light)
     }
     private var showPreview: Bool { monitor.enabled && monitor.showEdgePreview }
-    private var preview: some View {
-        CodexEdgePreview(monitor: monitor, language: model.language, classic: model.isClassic) {
-            model.channel = .codex; model.onReveal?()
-        }.padding(.bottom, 3)
-    }
     private var antenna: some View {
         ZStack(alignment: .top) {
             AntennaArtwork(classic: model.isClassic, extensionAmount: extensionAmount)
