@@ -1,36 +1,36 @@
-# Verification · v0.5.0
+# Verification · v0.6.0
 
 Checked on an Apple Silicon Mac running macOS 15.5, 19 October 2026.
 
-## Automated tests
+## Automated tests and review
 
-`./test.sh` completed successfully with **194 PASS records** across the core, model, interaction, placement, language, discovery, discovery-model, webpage, setup, and login-adapter test programs.
+`./test.sh` completed successfully with **247 PASS records** across parsing, model, interaction, placement, language, discovery, webpage, setup, login, Codex collection, rolling windows, and monitor lifecycle programs.
 
-The new setup checks cover first launch, interrupted setup, upgrade migration from all persisted preferences and valid cached editions, validation, completion persistence, language and research choices, fetch gating, selected-station warmup, replay, and skip. Migration regressions were reproduced before fixing them. The login adapter's 29 checks inject OS operations to verify enabled, disabled, pending approval, failure, retry, and installation-location states without changing real login items.
+The collector has 43 focused checks covering response-ID deduplication, legacy cumulative deltas and resets, inherited subagent histories, compaction, partial lines, rotation, unavailable sources, expiry, cache limits, and bounded directory/metadata/content work. Review identified three defects—invalid cumulative subsets, expiry not saved with an unavailable folder, and unbounded metadata discovery—which were reproduced, fixed, and independently re-reviewed.
 
-Six optional historical downloaded-feed checks are excluded because their local fixtures are not in this repository. This release did not run the full optional live-provider suite.
+Routing tests confirm a Codex-only configuration never requests a news feed or enters news reception scheduling. Window tests cover exact boundaries, future timestamps, real zero bins, and idle decay. Lifecycle tests cover setup gating, folder changes, retained preferences, disabling, and task ownership. The broad final review found no blocking issue.
 
-## Native interaction checks
+The optional live-provider suite was not rerun for this feature. Six historical downloaded-feed checks remain excluded because their local fixtures are not in this repository.
 
-A separately identified app with isolated preferences/cache was used for setup interaction checks. Its login operations were disabled.
+## Native checks
 
-- Classic and Flat retain the 374 × 416-point footprint. All three steps were inspected in English, with Simplified and Traditional Chinese language previews also checked.
-- Topic switches, expandable research subjects, empty-selection validation, Back, Continue, Start reading, and skip worked. Return advances and Escape goes back; an initial Escape issue was reproduced and corrected with the Back button's native cancel shortcut.
-- Finishing preserved the selected AI/research stations, physics subjects, and language. Live fetching showed the existing radio-wave loading state and produced a cached edition. Relaunch began tucked and did not repeat setup.
-- The installed app migrated without showing setup. Every pre-existing preference matched its saved pre-update value. Its real macOS login status was displayed as enabled; this check did not toggle the user's existing registration.
-- The final executable passed eight geometry cases and native drag/floating-panel/tuck → reveal → tuck diagnostics.
+- Isolated sample and live previews use separate preferences/caches and disable login-item operations. Classic/Flat and all three UI languages were rendered; English and Chinese layouts were visually checked.
+- SEC/MIN/HR and previous/next hardware controls switched views. Real local activity changed while Codex sessions were running. Selecting a folder without logs cleared the old reading and displayed a dash with an explicit no-session state.
+- The installed app opened tucked, preserved every preference before opt-in, and retained its enabled macOS login status. Codex was enabled through the rear switch and selected on the dial. Existing station/source/language/appearance/placement preferences were preserved; saving also serialized an empty default `webpageURLs` field for a legacy custom station.
+- The installed Codex screen showed current readings and a truthful partial-history notice for unsupported/oversized local records. Accessibility output exposed input/output and their subsets, and the last-record timestamp.
+- Eight native edge/monitor geometry cases passed. The 374 × 416-point footprint is unchanged.
 
-## Build and release package
+## Performance and package
 
-`./build.sh` produced version **0.5.0, build 16**, using whole-module release optimization and ServiceManagement. Strict ad-hoc signature verification passed for both the built and installed bundles. The installed executable matched the build byte-for-byte.
+A read-only diagnostic replayed 1.62 GB across 230 local files in 194 bounded polls in **8.46 seconds**. Measured CPU time was 5.38 seconds user / 1.20 seconds system, with peak RSS about 92 MB. The next idle poll read **0 bytes**. These are observations on one Mac, not performance guarantees.
 
-The app-only ZIP passed its integrity check, and all bundle files matched the fresh build. A SHA-256 checksum accompanies the download.
+`./build.sh` produced **0.6.0, build 17**. Both built and installed bundles passed strict ad-hoc signature verification, and the installed executable matched the build byte-for-byte. The previous installed app was retained locally for rollback. The app-only ZIP passed its integrity check and all packaged files matched the build; its SHA-256 checksum accompanies the download.
 
 ## Remaining limitations
 
-- The minimum deployment target is macOS 14; runtime checks here used macOS 15.5.
-- Actual logout/login, sleep/wake, broader full-screen Spaces, multiple physical displays, and a complete VoiceOver pass remain outstanding. Login approval and failure paths were exercised through injected OS responses.
-- Developer ID signing, notarization, Mac App Store submission, Intel builds, and automatic app updates are not included.
-- Public sources may change or fail. Deterministic tests do not establish every provider's current availability.
+- Local Codex log formats can change. Unsupported compressed files, oversized records, mixed-schema reconciliation, and missing cumulative baselines can produce incomplete totals; those conditions are surfaced.
+- Recorded bursts do not measure exact generation speed, subscription allowance, cost, or sessions on other machines/cloud workers. Discovery of a new nested session can take roughly 15 seconds; existing active logs are checked more frequently.
+- Runtime checks used macOS 15.5; the deployment target remains macOS 14. Actual logout/login, sleep/wake, multiple physical displays, and a full VoiceOver pass remain outstanding.
+- Developer ID signing, notarization, Mac App Store submission, Intel builds, and automatic application updates are not included.
 
-The repository excludes personal preferences, source caches, build caches, local app backups, and development-session data. The setup screenshot shows an isolated test profile.
+The repository and release exclude personal preferences, numeric history, source logs, caches, local backups, and development-session data. The published monitor screenshot uses sample numbers.
