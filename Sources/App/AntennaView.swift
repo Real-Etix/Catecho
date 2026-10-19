@@ -50,6 +50,7 @@ final class WindowDragHandleView: NSView {
 struct AntennaArtwork: View {
     var classic: Bool
     var extensionAmount: CGFloat = 0
+    var showsBase = true
     private var metal: LinearGradient {
         LinearGradient(colors: [Color(red: 0.40, green: 0.43, blue: 0.40), Color.white.opacity(0.95), Color(red: 0.56, green: 0.58, blue: 0.53)], startPoint: .leading, endPoint: .trailing)
     }
@@ -70,7 +71,7 @@ struct AntennaArtwork: View {
                 .overlay(Circle().stroke(Color.radioInk.opacity(0.8), lineWidth: 0.8))
                 .position(x: 27, y: 44 - lift)
             RoundedRectangle(cornerRadius: 6).fill(Color.radioInk.opacity(0.7)).frame(width: 12, height: 11).position(x: 27, y: 99)
-            ZStack {
+            if showsBase { ZStack {
                 RoundedRectangle(cornerRadius: 9)
                     .fill(classic ? AnyShapeStyle(LinearGradient(colors: [.white, .radioCream, Color(red: 0.79, green: 0.75, blue: 0.66)], startPoint: .topLeading, endPoint: .bottomTrailing)) : AnyShapeStyle(Color.radioCream))
                     .overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.radioInk.opacity(0.65), lineWidth: 0.8))
@@ -78,7 +79,7 @@ struct AntennaArtwork: View {
                 HStack(spacing: 4) {
                     ForEach(0..<3) { _ in Capsule().fill(Color.radioInk.opacity(0.5)).frame(width: 2, height: 9) }
                 }
-            }.frame(width: 42, height: 26).position(x: 27, y: 110)
+            }.frame(width: 42, height: 26).position(x: 27, y: 110) }
         }.frame(width: 54, height: 126)
         .accessibilityHidden(true)
     }

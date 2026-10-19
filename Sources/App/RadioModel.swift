@@ -26,6 +26,7 @@ final class RadioModel: ObservableObject {
     @Published var botExpanded = false
     @Published var botRoomReserved = false
     @Published var botOriginCorrection: CGFloat = 0
+    @Published var botVerticalCorrection: CGFloat = 0
     @Published var settingsOpen = false { didSet { syncCodex() } }
     @Published private(set) var setupOpen = false { didSet { syncCodex() } }
     @Published var cacheWarning: String?

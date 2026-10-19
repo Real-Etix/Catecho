@@ -1,4 +1,20 @@
-# Verification · v0.9.0
+# Verification · v0.9.1
+
+Checked on 19 October 2026 with the native macOS build.
+
+- The original antenna footprint is restored: compact 54 × 126 points, extended 260 × 178 points. Its cream base grows from 42 × 26 to 216 × 78 points. The original chrome antenna artwork is reused; no large head or face remains.
+- The final offline suite completed successfully with 308 PASS records. Geometry covers 1,818 intermediate poses, all screen corners on both edges, off-origin displays, glove attachment, deliberate pull gestures, and reservation/retraction continuity on both axes.
+- Native smoke checks passed for base dragging, compact → extended → compact, delayed release during base tracking, full-radio round trips, and dragging a corrected reserved panel followed by display reposition and retraction. The review-found display-reposition jump was reproduced before the fix; its regression and native checks now pass. Follow-up review found no further actionable issues.
+- Classic and Flat were rendered in all three languages at 0%, 50% and 100%. Intermediate content scales to fit the growing e-paper inset without clipped header/footer fragments.
+- The isolated sample preview was checked with compact belly/glove clicks, inward glove pull, lower-rim dragging, Escape and antenna opening of the full radio. The sample chat's 4.1M reading agreed with the full radio. An attempted blank-area click was unavailable through the GUI tool, so no blank-area event-routing result is claimed.
+- The installed app was checked in Traditional Chinese with the user's current seconds view and live local activity. Compact belly expansion and glove retraction worked; the original compact antenna was left visible. All saved preference values exactly matched the pre-update export.
+- Build 0.9.1 (21) passed strict ad-hoc signature verification, and the installed executable matches the built executable. The preceding bundle is retained locally for rollback. Token accounting, fetching, login registration and storage formats are unchanged.
+
+Reduce Motion uses the direct state-change path; the system preference was not changed during this revision. Live provider tests were not repeated because fetching is unchanged. Missing local Codex history still produces the existing partial-history indication.
+
+---
+
+## Previous verification · v0.9.0
 
 Checked on 19 October 2026 with the native macOS build.
 

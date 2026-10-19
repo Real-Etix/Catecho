@@ -47,7 +47,7 @@ struct LittleRadioApp {
                     let content = TokenBotPose(progress: progress, left: false, classic: classic, monitor: model.codex, language: language, now: Date())
                         .padding(20).background(Color(red: 0.96, green: 0.95, blue: 0.92)).preferredColorScheme(.light)
                     let name = "bot-\(classic ? "Classic" : "Flat")-\(language.rawValue)-\(Int(progress * 100)).png"
-                    renderNative(content, to: directory.appendingPathComponent(name), size: CGSize(width: 344, height: 254))
+                    renderNative(content, to: directory.appendingPathComponent(name), size: CGSize(width: BotGeometry.fullWidth + 40, height: BotGeometry.height + 40))
                     print("Rendered \(name)")
                 }
             }

@@ -9,84 +9,44 @@ enum BotMaterial {
     }
 }
 
+/// The original cream antenna base becomes the dashboard housing.
 struct TokenBotShell: View {
     let classic: Bool
+    let pose: BotGeometry
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 32, style: .continuous)
-                .fill(BotMaterial.cream(classic))
-                .shadow(color: .black.opacity(classic ? 0.22 : 0), radius: 3, x: 0, y: 3)
-            RoundedRectangle(cornerRadius: 31, style: .continuous)
-                .strokeBorder(LinearGradient(colors: [.white.opacity(classic ? 0.95 : 0), .radioInk.opacity(0.35)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 1)
-                .padding(1)
+            RoundedRectangle(cornerRadius: 9 + 5 * pose.progress, style: .continuous)
+                .fill(classic ? AnyShapeStyle(LinearGradient(colors: [.white, .radioCream, Color(red: 0.79, green: 0.75, blue: 0.66)], startPoint: .topLeading, endPoint: .bottomTrailing)) : AnyShapeStyle(Color.radioCream))
+                .overlay(RoundedRectangle(cornerRadius: 9 + 5 * pose.progress).stroke(Color.radioInk.opacity(0.65), lineWidth: 0.8))
+                .shadow(color: .black.opacity(classic ? 0.22 : 0), radius: 2, y: 2)
             if classic {
-                RoundedRectangle(cornerRadius: 29, style: .continuous)
-                    .fill(Color.clear.shadow(.inner(color: BotMaterial.shade.opacity(0.55), radius: 7, x: -3, y: -4)))
-                    .padding(2)
+                RoundedRectangle(cornerRadius: 8 + 5 * pose.progress)
+                    .strokeBorder(LinearGradient(colors: [.white.opacity(0.85), .clear, BotMaterial.shade.opacity(0.65)], startPoint: .topLeading, endPoint: .bottomTrailing), lineWidth: 0.8)
+                    .padding(1)
             }
-            // The belly has a genuine recess behind the telescopic screen frame.
-            RoundedRectangle(cornerRadius: 15).fill(Color.radioInk.opacity(0.38))
-                .overlay(RoundedRectangle(cornerRadius: 15).stroke(.white.opacity(classic ? 0.6 : 0), lineWidth: 1).offset(y: 1))
-                .frame(width: 108, height: 79).offset(y: 20)
-            face.offset(y: -34)
-            VStack(spacing: 3) {
+            HStack(spacing: 3) {
                 ForEach(0..<3) { _ in
-                    Capsule().fill(Color.radioInk.opacity(0.55)).frame(width: 20, height: 2)
-                        .shadow(color: .white.opacity(classic ? 0.6 : 0), radius: 0, y: 1)
+                    Capsule().fill(Color.radioInk.opacity(0.45)).frame(width: 2, height: 3)
+                        .shadow(color: .white.opacity(classic ? 0.7 : 0), radius: 0, y: 0.6)
                 }
-            }.offset(y: 65)
-            Path { p in p.move(to: CGPoint(x: 15, y: 139)); p.addQuadCurve(to: CGPoint(x: 111, y: 139), control: CGPoint(x: 63, y: 145)) }
-                .stroke(BotMaterial.shade.opacity(0.7), lineWidth: 0.7)
-        }.frame(width: 126, height: 152).accessibilityHidden(true)
-    }
-    private var face: some View {
-        HStack(spacing: 17) {
-            eye
-            Path { p in p.move(to: CGPoint(x: 0, y: 2)); p.addQuadCurve(to: CGPoint(x: 12, y: 2), control: CGPoint(x: 6, y: 9)) }
-                .stroke(Color.radioInk, style: StrokeStyle(lineWidth: 1.7, lineCap: .round)).frame(width: 12, height: 8).offset(y: 6)
-            eye
-        }
-    }
-    private var eye: some View {
-        Capsule().fill(Color.radioInk).frame(width: 4.5, height: 9)
-            .overlay(Capsule().stroke(.white.opacity(classic ? 0.6 : 0), lineWidth: 0.6).offset(y: 0.5))
-    }
-}
-
-struct TokenBotAerial: View {
-    let classic: Bool
-    var lift: CGFloat = 0
-    var body: some View {
-        ZStack(alignment: .bottom) {
-            Capsule().fill(classic ? AnyShapeStyle(BotMaterial.metal) : AnyShapeStyle(Color.radioPaper))
-                .frame(width: 5, height: 30 + lift).offset(y: -3)
-            Capsule().fill(classic ? AnyShapeStyle(BotMaterial.metal) : AnyShapeStyle(Color.radioCream))
-                .frame(width: 7, height: 13).offset(y: -2)
-            Circle().fill(classic ? AnyShapeStyle(BotMaterial.metal) : AnyShapeStyle(Color.radioCream))
-                .overlay(Circle().stroke(Color.radioInk.opacity(0.65), lineWidth: 0.6))
-                .frame(width: 8, height: 8).offset(y: -30 - lift)
-            Capsule().fill(Color.radioInk.opacity(0.65)).frame(width: 7, height: 1).offset(y: -15)
-            Ellipse().fill(classic ? AnyShapeStyle(BotMaterial.metal) : AnyShapeStyle(Color.radioCream))
-                .overlay(Ellipse().stroke(Color.radioInk.opacity(0.55), lineWidth: 0.7))
-                .frame(width: 15, height: 5)
-        }.frame(width: 32, height: 52, alignment: .bottom).accessibilityHidden(true)
+            }.offset(y: pose.shellHeight / 2 - 4)
+        }.frame(width: pose.shellWidth, height: pose.shellHeight).accessibilityHidden(true)
     }
 }
 
 struct TokenBotArm: View {
-    let centerX: CGFloat
-    let progress: Double
+    let pose: BotGeometry
     let hand: CGFloat
     let classic: Bool
-    private var shoulder: CGPoint { CGPoint(x: centerX + hand * 62, y: 109) }
-    private var elbow: CGPoint { CGPoint(x: centerX + hand * (74 + 60 * progress), y: 146 - 24 * progress) }
-    private var wrist: CGPoint { CGPoint(x: centerX + hand * (52 + 80 * progress), y: 151) }
+    private var shoulder: CGPoint { CGPoint(x: pose.centerX + hand * 18, y: pose.shellTop + 4) }
+    private var elbow: CGPoint { CGPoint(x: pose.centerX + hand * (22 + 93 * pose.progress), y: pose.shellTop + 3 - 13 * pose.progress) }
+    private var wrist: CGPoint { hand < 0 ? pose.leftGrip : pose.rightGrip }
     var body: some View {
         ZStack {
-            rod(from: shoulder, to: elbow, width: 5.5)
-            rod(from: elbow, to: wrist, width: 4.5)
-            joint(size: 13).position(shoulder)
-            joint(size: 8).position(elbow)
+            rod(from: shoulder, to: elbow, width: 1.5 + 2.5 * pose.progress)
+            rod(from: elbow, to: wrist, width: 1 + 2 * pose.progress)
+            joint(size: 3 + 5 * pose.progress).position(shoulder)
+            joint(size: 3 + 4 * pose.progress).position(elbow)
         }.accessibilityHidden(true)
     }
     private func rod(from: CGPoint, to: CGPoint, width: CGFloat) -> some View {

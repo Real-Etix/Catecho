@@ -152,6 +152,7 @@ final class DesktopController: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     private func resetPlacement() {
         anchor = AntennaAnchor(x: model.edge == "Left" ? 0 : 1, y: 0.5)
+        model.botOriginCorrection = 0; model.botVerticalCorrection = 0
         savePlacement()
         position()
     }
@@ -159,10 +160,13 @@ final class DesktopController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard panel != nil else { return }
         let visible = screen.visibleFrame
         let left = model.edge == "Left"
-        model.botOriginCorrection = model.botRoomReserved ? BotGeometry.reservationOffset(anchor: anchor.frame(visible: visible), visible: visible, left: left) : 0
+        let compact = anchor.frame(visible: visible)
+        let reservedCorrection = CGSize(width: model.botOriginCorrection, height: model.botVerticalCorrection)
         let tucked = showsCodexPreview
-            ? BotGeometry.windowFrame(anchor: anchor.frame(visible: visible), visible: visible, left: left, expanded: model.botRoomReserved)
-            : RadioPlacement.tuckedFrame(anchor: anchor.frame(visible: visible), visible: visible, left: left, preview: false)
+            ? BotGeometry.windowFrame(anchor: compact, visible: visible, left: left, expanded: model.botRoomReserved, reservedCorrection: reservedCorrection)
+            : RadioPlacement.tuckedFrame(anchor: compact, visible: visible, left: left, preview: false)
+        let offset = model.botRoomReserved ? BotGeometry.reservationOffset(compact: compact, reserved: tucked, left: left) : .zero
+        model.botOriginCorrection = offset.width; model.botVerticalCorrection = offset.height
         let antenna = showsCodexPreview
             ? BotGeometry.anchorFrame(window: tucked, visible: visible, left: left)
             : RadioPlacement.antennaFrame(tucked: tucked, visible: visible, left: left, preview: false)
@@ -180,7 +184,11 @@ final class DesktopController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         panel.setFrame(moved, display: true)
         let antenna: CGRect
         if model.isExpanded { antenna = RadioPlacement.antennaFrame(expanded: moved, visible: target.visibleFrame, left: model.edge == "Left") }
-        else if showsCodexPreview { antenna = BotGeometry.anchorFrame(window: moved, visible: target.visibleFrame, left: model.edge == "Left", reservedCorrection: model.botRoomReserved ? model.botOriginCorrection : 0) }
+        else if showsCodexPreview {
+            antenna = BotGeometry.anchorFrame(window: moved, visible: target.visibleFrame, left: model.edge == "Left",
+                                             reservedCorrection: model.botRoomReserved ? model.botOriginCorrection : 0,
+                                             reservedVerticalCorrection: model.botRoomReserved ? model.botVerticalCorrection : 0)
+        }
         else { antenna = RadioPlacement.antennaFrame(tucked: moved, visible: target.visibleFrame, left: model.edge == "Left", preview: false) }
         anchor = AntennaAnchor(frame: antenna, visible: target.visibleFrame)
         savePlacement()
@@ -217,6 +225,7 @@ final class DesktopController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         botDragging = false; botShrinkPending = false
         model.botExpanded = false
         model.botRoomReserved = false
+        model.botOriginCorrection = 0; model.botVerticalCorrection = 0
     }
     private func setBotExpanded(_ expanded: Bool, animated: Bool = true) {
         guard !model.isExpanded, showsCodexPreview else { return }
@@ -287,13 +296,13 @@ final class DesktopController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         verifyDragTracking()
         tuck()
         let collapsed = panel.frame
-        smokeCheck(collapsed.width == (showsCodexPreview ? BotGeometry.compactWidth : 54) && collapsed.height == (showsCodexPreview ? BotGeometry.height : 126))
+        smokeCheck(collapsed.width == 54 && collapsed.height == 126)
         smokeCheck(screen.visibleFrame.contains(collapsed))
         smokeCheck(panel.level.rawValue > NSWindow.Level.normal.rawValue)
         smokeCheck(!panel.hidesOnDeactivate)
         if showsCodexPreview {
             setBotExpanded(true, animated: false)
-            smokeCheck(panel.frame.width == BotGeometry.fullWidth && screen.visibleFrame.contains(panel.frame))
+            smokeCheck(panel.frame.width == BotGeometry.fullWidth && panel.frame.height == BotGeometry.height && screen.visibleFrame.contains(panel.frame))
             model.onBotDragBegan?()
             setBotExpanded(false, animated: false)
             smokeCheck(panel.frame.width == BotGeometry.fullWidth, "Retraction must not resize during base tracking")
@@ -307,8 +316,32 @@ final class DesktopController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         smokeCheck(screen.visibleFrame.contains(expanded))
         tuck()
         smokeCheck(panel.frame == collapsed)
+        if showsCodexPreview && CommandLine.arguments.contains("--codex-preview") { verifyBotRepositioning() }
         print("PASS native panel tuck → reveal → tuck: \(collapsed) / \(expanded)")
         NSApp.terminate(nil)
+    }
+    private func verifyBotRepositioning() {
+        let savedAnchor = anchor
+        let visible = screen.visibleFrame
+        anchor = AntennaAnchor(x: model.edge == "Left" ? 1 : 0, y: 1)
+        position()
+        setBotExpanded(true, animated: false)
+        smokeCheck(model.botVerticalCorrection == BotGeometry.compactHeight - BotGeometry.height)
+        panel.setFrameOrigin(CGPoint(x: visible.midX - BotGeometry.fullWidth / 2, y: visible.midY - BotGeometry.height / 2))
+        windowDragFinished()
+        let moved = panel.frame
+        let correction = CGSize(width: model.botOriginCorrection, height: model.botVerticalCorrection)
+        position() // Wake and screen-parameter notifications use this path.
+        smokeCheck(abs(panel.frame.minX - moved.minX) < 0.01 && abs(panel.frame.minY - moved.minY) < 0.01,
+                   "Repositioning a dragged reserved panel must retain its current frame")
+        smokeCheck(abs(model.botOriginCorrection - correction.width) < 0.01 && abs(model.botVerticalCorrection - correction.height) < 0.01)
+        setBotExpanded(false, animated: false)
+        let compact = panel.frame
+        let closing = BotGeometry(progress: 0, left: model.edge == "Left", originCorrection: correction.width, verticalCorrection: correction.height)
+        smokeCheck(abs(compact.midX - (moved.minX + closing.centerX)) < 0.01)
+        smokeCheck(abs(compact.minY + 16 - (moved.maxY - closing.shellY)) < 0.01)
+        anchor = savedAnchor; savePlacement(); position()
+        print("PASS native reserved drag → display reposition → retract preserves both axes")
     }
     private func verifyDragTracking() {
         let testWindow = NSPanel(contentRect: CGRect(x: 100, y: 100, width: 374, height: 416), styleMask: [.borderless], backing: .buffered, defer: false)

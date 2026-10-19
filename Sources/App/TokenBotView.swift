@@ -11,6 +11,7 @@ struct TokenBotView: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             TokenBotPose(progress: progress, left: model.edge == "Left", classic: model.isClassic, originCorrection: model.botOriginCorrection,
+                         verticalCorrection: model.botVerticalCorrection,
                          antennaLift: antennaLift, monitor: monitor, language: model.language, now: context.date,
                          toggle: { model.onBotExpansion?(!model.botExpanded) },
                          pull: { model.onBotExpansion?($0) },
@@ -19,7 +20,8 @@ struct TokenBotView: View {
                          moved: { model.onWindowDragFinished?() }, dragBegan: { model.onBotDragBegan?() }, dragEnded: { model.onBotDragEnded?() })
         }
         .frame(width: model.botRoomReserved ? BotGeometry.fullWidth : BotGeometry.compactWidth,
-               height: BotGeometry.height, alignment: model.edge == "Left" ? .leading : .trailing)
+               height: model.botRoomReserved ? BotGeometry.height : BotGeometry.compactHeight,
+               alignment: model.edge == "Left" ? .bottomLeading : .bottomTrailing)
         .clipped()
         .onChange(of: model.botExpanded) { _, value in
             withAnimation(reduceMotion ? nil : .timingCurve(0.22, 0.75, 0.18, 1, duration: BotGeometry.duration)) { progress = value ? 1 : 0 }
@@ -35,6 +37,7 @@ struct TokenBotPose: View, Animatable {
     let left: Bool
     let classic: Bool
     var originCorrection: CGFloat = 0
+    var verticalCorrection: CGFloat = 0
     var antennaLift: CGFloat = 0
     let monitor: CodexMonitorModel
     let language: RadioLanguage
@@ -47,7 +50,7 @@ struct TokenBotPose: View, Animatable {
     var dragBegan: () -> Void = {}
     var dragEnded: () -> Void = {}
     var animatableData: Double { get { progress } set { progress = newValue } }
-    private var pose: BotGeometry { BotGeometry(progress: progress, left: left, originCorrection: originCorrection) }
+    private var pose: BotGeometry { BotGeometry(progress: progress, left: left, originCorrection: originCorrection, verticalCorrection: verticalCorrection) }
     private func t(_ text: String) -> String { language.text(text) }
     private var expanded: Bool { progress > 0.5 }
     private var scope: String { monitor.title(for: monitor.selectedSessionID, language: language) }
@@ -59,24 +62,25 @@ struct TokenBotPose: View, Animatable {
     }
     var body: some View {
         ZStack(alignment: .topLeading) {
-            TokenBotShell(classic: classic).position(x: pose.centerX, y: 131)
-            antenna.position(x: pose.centerX, y: 29)
+            AntennaArtwork(classic: classic, extensionAmount: antennaLift, showsBase: false)
+                .position(x: pose.centerX, y: pose.antennaY).allowsHitTesting(false)
             ForEach([-1.0, 1.0], id: \.self) { side in
-                TokenBotArm(centerX: pose.centerX, progress: pose.progress, hand: side, classic: classic)
+                TokenBotArm(pose: pose, hand: side, classic: classic).allowsHitTesting(false)
             }
+            TokenBotShell(classic: classic, pose: pose).position(x: pose.centerX, y: pose.shellY).allowsHitTesting(false)
+            antenna.position(x: pose.centerX, y: pose.shellTop - 48.5)
             screen.position(x: pose.centerX, y: pose.screenY)
-            glove(right: false).position(x: pose.leftGrip.x - 7, y: pose.leftGrip.y)
-            glove(right: true).position(x: pose.rightGrip.x + 7, y: pose.rightGrip.y)
+            glove(right: false).position(pose.leftGrip)
+            glove(right: true).position(pose.rightGrip)
             WindowDragHandle(hint: t("Drag the bot's base to move Catecho"), onStarted: dragBegan, onEnded: dragEnded, onFinished: moved)
-                .frame(width: 100, height: 21).position(x: pose.centerX, y: 197)
+                .frame(width: pose.shellWidth - 8, height: 8).position(x: pose.centerX, y: pose.bottomY - 4)
         }
         .frame(width: BotGeometry.fullWidth, height: BotGeometry.height)
     }
     private var antenna: some View {
-        TokenBotAerial(classic: classic, lift: antennaLift)
-            .frame(width: 44, height: 54).contentShape(Rectangle())
+        Color.clear.frame(width: 54, height: 97).contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 0)
-                .onChanged { antennaChanged(min(12, max(0, -$0.translation.height))) }
+                .onChanged { antennaChanged(min(AntennaPull.distance, max(0, -$0.translation.height))) }
                 .onEnded { value in
                     antennaChanged(0)
                     if (abs(value.translation.width) < 4 && abs(value.translation.height) < 4) || AntennaPull.opensRadio(value.translation) { open() }
@@ -89,7 +93,10 @@ struct TokenBotPose: View, Animatable {
             .accessibilityAction { open() }
     }
     private func glove(right: Bool) -> some View {
-        Button(action: toggle) { TokenBotGlove(classic: classic, right: right).frame(width: 34, height: 44).contentShape(Rectangle()) }
+        Button(action: toggle) {
+            TokenBotGlove(classic: classic, right: right).scaleEffect(pose.gloveScale)
+                .frame(width: 10 + 20 * pose.progress, height: 18 + 22 * pose.progress).contentShape(Rectangle())
+        }
             .buttonStyle(.plain)
             .highPriorityGesture(DragGesture(minimumDistance: 8).onEnded { value in
                 if let target = BotGeometry.dragTarget(translation: value.translation, hand: right ? 1 : -1) { pull(target) }
@@ -100,21 +107,20 @@ struct TokenBotPose: View, Animatable {
     private var screen: some View {
         Button(action: toggle) {
             ZStack {
-                RoundedRectangle(cornerRadius: 12).fill(BotMaterial.cream(classic))
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.radioInk.opacity(0.45), lineWidth: 0.7))
-                    .shadow(color: .black.opacity(classic ? 0.18 : 0), radius: 2, y: 2)
-                    .frame(width: pose.screenWidth, height: 68 + 10 * pose.progress)
-                RoundedRectangle(cornerRadius: 9)
-                    .fill(Color.radioPaper.shadow(.inner(color: .black.opacity(classic ? 0.22 : 0), radius: 3, x: 1, y: 2)))
-                    .overlay(RoundedRectangle(cornerRadius: 9).stroke(.white.opacity(classic ? 0.75 : 0), lineWidth: 0.7))
-                    .frame(width: pose.screenWidth - 8, height: 60 + 10 * pose.progress)
+                RoundedRectangle(cornerRadius: 3 + 5 * pose.progress)
+                    .fill(Color.radioPaper.shadow(.inner(color: .black.opacity(classic ? 0.22 : 0), radius: 1 + 2 * pose.progress, x: 0.5, y: 1)))
+                    .overlay(RoundedRectangle(cornerRadius: 3 + 5 * pose.progress).stroke(Color.radioInk.opacity(0.4), lineWidth: 0.6))
+                    .overlay(RoundedRectangle(cornerRadius: 3 + 5 * pose.progress).stroke(.white.opacity(classic ? 0.65 : 0), lineWidth: 0.5).offset(y: 0.7))
+                    .frame(width: pose.screenWidth, height: pose.screenHeight)
                 compactReading.opacity(1 - min(1, pose.progress * 2.5))
-                fullReading.opacity(max(0, (pose.progress - 0.35) / 0.65))
-                    .frame(width: pose.screenWidth - 36).clipped()
+                fullReading.frame(width: max(0, pose.screenWidth - 20)).fixedSize(horizontal: false, vertical: true)
+                    .scaleEffect(min(1, pose.screenHeight / 60))
+                    .opacity(max(0, (pose.progress - 0.35) / 0.65))
+                    .frame(width: max(0, pose.screenWidth - 20), height: pose.screenHeight - 4).clipped()
             }
-            .frame(width: pose.screenWidth, height: 68 + 10 * pose.progress)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .contentShape(RoundedRectangle(cornerRadius: 12))
+            .frame(width: pose.screenWidth, height: pose.screenHeight)
+            .clipShape(RoundedRectangle(cornerRadius: 3 + 5 * pose.progress))
+            .contentShape(RoundedRectangle(cornerRadius: 3 + 5 * pose.progress))
         }
         .buttonStyle(.plain)
         .foregroundStyle(Color.radioInk)
@@ -122,16 +128,14 @@ struct TokenBotPose: View, Animatable {
         .accessibilityLabel([t(expanded ? "Retract token dashboard" : "Expand token dashboard"), scope, monitor.reading(now: now) + " " + unit, t(status)].filter { !$0.isEmpty }.joined(separator: ", "))
     }
     private var compactReading: some View {
-        VStack(spacing: 4) {
-            Text(monitor.reading(now: now, compact: true)).font(.system(size: 20, weight: .medium, design: .serif)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.65)
-            HStack(spacing: 3) {
-                Text(t(monitor.window.label)).font(.system(size: 7, weight: .medium, design: .monospaced)).tracking(1)
-                if !status.isEmpty { statusIcon }
-            }
-        }.frame(width: 68)
+        HStack(spacing: 1) {
+            Text(monitor.reading(now: now, compact: true)).font(.system(size: 8, weight: .semibold, design: .rounded))
+                .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+            if !status.isEmpty { Circle().fill(Color.radioInk.opacity(0.7)).frame(width: 2, height: 2) }
+        }.frame(width: 26)
     }
     private var fullReading: some View {
-        VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 2) {
             HStack {
                 Text("CODEX").tracking(2)
                 Spacer()
@@ -139,7 +143,7 @@ struct TokenBotPose: View, Animatable {
                 Text(t(monitor.window.label)).tracking(1)
             }.font(.system(size: 8, weight: .medium, design: .monospaced))
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(monitor.reading(now: now, compact: true)).font(.system(size: 25, weight: .medium, design: .serif)).monospacedDigit()
+                Text(monitor.reading(now: now, compact: true)).font(.system(size: 21, weight: .medium, design: .serif)).monospacedDigit()
                 Text(unit).font(.system(size: 9))
             }.lineLimit(1).minimumScaleFactor(0.7)
             Rectangle().fill(Color.radioInk.opacity(0.3)).frame(height: 0.5)

@@ -1,5 +1,11 @@
 # Catecho belly token bot
 
+## Approved appearance correction
+
+The user subsequently chose **Original small antenna widget**. Preserve its 54 × 126-point resting footprint, chrome shaft and 42 × 26-point cream base. Remove the larger head and face. Fold small white gloves at the sides of the base; show the current token count in a tiny e-paper inset. Opening extends the base into a 216 × 78-point belly dashboard held by telescopic arms. The reserved window is 260 × 178 points. The top antenna still opens the full radio. The lower rim moves the widget. Keep the existing monitor, controls, translations and accessibility behavior.
+
+Reserve space upward and toward the screen interior. Correct both horizontal and vertical origins when the screen boundary forces the expanded window to shift; opening, reversal, dragging and closing must preserve the visual anchor. This correction supersedes the large robot silhouette described below.
+
 The user approved the three-pose cream robot concept and requested implementation, with a vertical chrome antenna at the exact top centre, two telescoping antenna arms and white gloves holding an expanding belly screen.
 
 The bot replaces the existing antenna-side token preview when Codex monitoring and edge preview are enabled. Without the preview, the existing antenna remains. The full radio remains available through the top antenna. The base moves the widget; the belly and gloves toggle its dashboard. A horizontal pull also expands/retracts it. Compact mode keeps a live reading visible. Expanded mode shows the selected chat, time window and coverage status using the existing local monitor.

@@ -15,6 +15,14 @@
 
 ## Tasks
 
+### Small antenna revision
+
+- [x] Add regression checks for the original compact footprint, vertical reservation continuity at the top edge, and closing after moving a corrected reserved window.
+- [x] Reuse the original antenna artwork and grow only the cream base, its inset screen, telescopic arms and gloves. Add vertical placement correction and preserve interruptible motion and native drag tracking.
+- [x] Render Classic/Flat and all languages; run offline and native tests; review the revision. Build 0.9.1 (21), safely replace the local app, verify preferences and leave the antenna compact.
+
+### Initial implementation
+
 - [x] Add regression tests in `Tests/Bot/main.swift` for bounded inward expansion on both edges, drag roundtrips, grip alignment and gesture direction. Run with `swiftc` through `toolchain.sh`; verify the missing feature fails before adding `Sources/Core/BotGeometry.swift`.
 - [x] Add `Sources/App/TokenBotArtwork.swift` for the cream shell, centred aerial, telescopic arms and custom glove shapes. Add `Sources/App/TokenBotView.swift` for live readings, accessible click/pull controls and the base drag region. Use one animatable progress value; derive every moving position from it.
 - [x] Integrate `EdgeTab`, RadioModel and DesktopController. Reserve the expanded native frame before opening; release it after the 280 ms close, cancelling stale completions. Keep the 54 × 126 antenna anchor format. Add bot-aware native smoke checks and a `--render-bot` sample renderer.
