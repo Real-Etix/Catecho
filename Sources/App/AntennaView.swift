@@ -80,9 +80,24 @@ struct AntennaArtwork: View {
 
 struct EdgeTab: View {
     @ObservedObject var model: RadioModel
+    @ObservedObject var monitor: CodexMonitorModel
     @State private var extensionAmount: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    init(model: RadioModel) { self.model = model; monitor = model.codex }
     var body: some View {
+        HStack(alignment: .bottom, spacing: 4) {
+            if showPreview && model.edge != "Left" { preview }
+            antenna
+            if showPreview && model.edge == "Left" { preview }
+        }.frame(width: showPreview ? 190 : 54, height: 126).preferredColorScheme(.light)
+    }
+    private var showPreview: Bool { monitor.enabled && monitor.showEdgePreview }
+    private var preview: some View {
+        CodexEdgePreview(monitor: monitor, language: model.language, classic: model.isClassic) {
+            model.channel = .codex; model.onReveal?()
+        }.padding(.bottom, 3)
+    }
+    private var antenna: some View {
         ZStack(alignment: .top) {
             AntennaArtwork(classic: model.isClassic, extensionAmount: extensionAmount)
             Color.clear.frame(width: 54, height: 97).contentShape(Rectangle())

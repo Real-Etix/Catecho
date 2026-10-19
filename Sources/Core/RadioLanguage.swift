@@ -69,6 +69,19 @@ enum RadioLanguage: String, CaseIterable {
         "The source took too long to respond. Try again shortly."
     ]
     static let strings: [String: (String, String)] = [
+        "All chats": ("所有对话", "所有對話"),
+        "Session": ("会话", "工作階段"),
+        "Choose chat": ("选择对话", "選擇對話"),
+        "Chats · last 24 hours": ("对话 · 过去 24 小时", "對話 · 過去 24 小時"),
+        "Done": ("完成", "完成"),
+        "Search chats or session ID": ("搜索对话或会话 ID", "搜尋對話或工作階段 ID"),
+        "No matching chats": ("没有匹配的对话", "沒有符合的對話"),
+        "Search to find more chats": ("搜索以查找更多对话", "搜尋以尋找更多對話"),
+        "Each local session is listed separately, including subagents. Names stay on this Mac.": ("每个本机会话单独列出，包括子代理。名称只保留在此 Mac 上。", "每個本機工作階段獨立列出，包括子代理。名稱只保留在此 Mac 上。"),
+        "Token preview beside antenna": ("在天线旁预览 Token 用量", "在天線旁預覽 Token 用量"),
+        "Choose All chats or one chat on the Codex screen. The antenna preview follows that choice.": ("在 Codex 屏幕选择所有对话或单个对话，天线旁的预览会跟随此选择。", "在 Codex 螢幕選擇所有對話或單一對話，天線旁的預覽會跟隨此選擇。"),
+        "Open Codex activity": ("打开 Codex 用量", "開啟 Codex 用量"),
+        "Uses the selected time view; readings update about every five seconds while tucked.": ("跟随所选时间范围；收起时约每五秒更新用量。", "跟隨所選時間範圍；收起時約每五秒更新用量。"),
         "Incomplete rollout lines exceeded the memory limit; history is partial.": ("未完成的记录超过内存限制，历史记录不完整。", "未完成的記錄超過記憶體限制，歷史記錄不完整。"),
         "Unsupported rollout compression was skipped; history is partial.": ("已跳过不支持的压缩记录，历史记录不完整。", "已略過不支援的壓縮記錄，歷史記錄不完整。"),
         "The rollout inventory exceeded the local file limit; history is partial.": ("记录文件数超过本机限制，历史记录不完整。", "記錄檔案數超過本機限制，歷史記錄不完整。"),

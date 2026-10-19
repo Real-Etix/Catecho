@@ -50,3 +50,7 @@ run_codex_zstd_tests
 # Bounded numeric projection from local JSON lines.
 swiftc "${RADIO_FLAGS[@]}" -parse-as-library "$RADIO_SOURCE_DIR/Sources/Core/CodexJSONProjection.swift" "$RADIO_SOURCE_DIR/Tests/CodexProjection/main.swift" -o "$RADIO_BUILD_DIR/codex-projection-tests"
 "$RADIO_BUILD_DIR/codex-projection-tests"
+
+# Per-chat aggregation and optional local title metadata.
+swiftc "${RADIO_FLAGS[@]}" -parse-as-library "$RADIO_SOURCE_DIR/Sources/Core/CodexUsage.swift" "$RADIO_SOURCE_DIR/Sources/Core/CodexUsageWindow.swift" "$RADIO_SOURCE_DIR"/Sources/Core/CodexSession*.swift "$RADIO_SOURCE_DIR/Tests/CodexSessions/main.swift" -o "$RADIO_BUILD_DIR/codex-sessions-tests"
+"$RADIO_BUILD_DIR/codex-sessions-tests"

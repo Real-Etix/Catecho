@@ -29,13 +29,25 @@ import SwiftUI
         print("PASS finishing setup starts local collection for an enabled station")
         monitor.window = .hour; monitor.step(1)
         precondition(monitor.window == .second)
+        monitor.selectSession("specific-chat")
+        monitor.showEdgePreview = false
         let second = CodexMonitorModel(preferences: preferences, historyDirectory: directory)
-        precondition(second.window == .second && second.rootDirectory.path == root.path)
+        precondition(second.window == .second && second.rootDirectory.path == root.path && second.selectedSessionID == "specific-chat" && !second.showEdgePreview)
         monitor.setRoot(directory.appendingPathComponent("missing"))
-        precondition(monitor.snapshot == nil)
+        precondition(monitor.snapshot == nil && monitor.selectedSessionID == nil && monitor.sessionNames.isEmpty)
         await wait { monitor.snapshot?.issue == .missingFolder }
         precondition(monitor.rootDirectory.path == preferences.string(forKey: "codexRootPath"))
         print("PASS source changes invalidate the old reading and persist folder/window choices")
+        let sample = CodexMonitorModel(preferences: preferences, historyDirectory: directory, simulated: true)
+        let choices = sample.sessions(now: Date())
+        precondition(choices.count == 2)
+        sample.selectSession(choices[0].id)
+        precondition(!sample.scopedEvents.isEmpty && sample.scopedEvents.allSatisfy { $0.sessionID == choices[0].id })
+        sample.selectSession("expired-chat")
+        precondition(sample.scopedEvents.isEmpty && sample.selectedSessionID == "expired-chat")
+        sample.selectSession(nil)
+        precondition(sample.scopedEvents == sample.snapshot?.events)
+        print("PASS chat scope persists, filters independently, and never falls back when selected activity expires")
         radio.configuration.enabledChannels = ["ai"]
         let checked = monitor.snapshot?.checkedAt
         precondition(!monitor.enabled)

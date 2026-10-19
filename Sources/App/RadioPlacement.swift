@@ -21,6 +21,13 @@ struct AntennaAnchor {
 }
 
 enum RadioPlacement {
+    static func tuckedFrame(anchor: CGRect, visible: CGRect, left: Bool, preview: Bool) -> CGRect {
+        let width: CGFloat = preview ? 190 : 54
+        return clamp(CGRect(x: left ? anchor.minX : anchor.maxX - width, y: anchor.minY, width: width, height: 126), visible: visible)
+    }
+    static func antennaFrame(tucked: CGRect, visible: CGRect, left: Bool, preview: Bool) -> CGRect {
+        clamp(CGRect(x: left ? tucked.minX : tucked.maxX - 54, y: tucked.minY, width: 54, height: 126), visible: visible)
+    }
     static func clamp(_ frame: CGRect, visible: CGRect) -> CGRect {
         CGRect(x: min(max(frame.minX, visible.minX), max(visible.minX, visible.maxX - frame.width)),
                y: min(max(frame.minY, visible.minY), max(visible.minY, visible.maxY - frame.height)),

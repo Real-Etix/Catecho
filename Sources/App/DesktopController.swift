@@ -75,6 +75,7 @@ final class DesktopController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
             if event.keyCode == 53 {
+                if self?.model.codex.isChatPickerPresented == true { return event }
                 if self?.model.setupOpen == true { return event }
                 if self?.model.settingsOpen == true { self?.model.settingsOpen = false }
                 else { self?.tuck() }
@@ -138,10 +139,13 @@ final class DesktopController: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func position() {
         guard panel != nil else { return }
         let visible = screen.visibleFrame
-        let antenna = anchor.frame(visible: visible)
-        let frame = model.isExpanded ? RadioPlacement.expandedFrame(anchor: antenna, visible: visible, left: model.edge == "Left") : antenna
+        let left = model.edge == "Left"
+        let tucked = RadioPlacement.tuckedFrame(anchor: anchor.frame(visible: visible), visible: visible, left: left, preview: showsCodexPreview)
+        let antenna = RadioPlacement.antennaFrame(tucked: tucked, visible: visible, left: left, preview: showsCodexPreview)
+        let frame = model.isExpanded ? RadioPlacement.expandedFrame(anchor: antenna, visible: visible, left: left) : tucked
         panel.setFrame(frame, display: true)
     }
+    private var showsCodexPreview: Bool { model.codex.enabled && model.codex.showEdgePreview }
     private func windowDragFinished() {
         guard panel != nil, !NSScreen.screens.isEmpty else { return }
         let displays = NSScreen.screens
@@ -150,7 +154,7 @@ final class DesktopController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         screenID = target.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber
         let moved = RadioPlacement.clamp(panel.frame, visible: target.visibleFrame)
         panel.setFrame(moved, display: true)
-        let antenna = model.isExpanded ? RadioPlacement.antennaFrame(expanded: moved, visible: target.visibleFrame, left: model.edge == "Left") : moved
+        let antenna = model.isExpanded ? RadioPlacement.antennaFrame(expanded: moved, visible: target.visibleFrame, left: model.edge == "Left") : RadioPlacement.antennaFrame(tucked: moved, visible: target.visibleFrame, left: model.edge == "Left", preview: showsCodexPreview)
         anchor = AntennaAnchor(frame: antenna, visible: target.visibleFrame)
         savePlacement()
     }
@@ -204,7 +208,7 @@ final class DesktopController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         verifyDragTracking()
         tuck()
         let collapsed = panel.frame
-        precondition(collapsed.width == 54 && collapsed.height == 126)
+        precondition(collapsed.width == (showsCodexPreview ? 190 : 54) && collapsed.height == 126)
         precondition(screen.visibleFrame.contains(collapsed))
         precondition(panel.level.rawValue > NSWindow.Level.normal.rawValue)
         precondition(!panel.hidesOnDeactivate)

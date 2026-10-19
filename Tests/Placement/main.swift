@@ -25,6 +25,16 @@ struct PlacementTests {
         precondition(RadioPlacement.screenIndex(frame: crossing, screens: [visible, other]) == 1)
         let invalid = AntennaAnchor(x: .nan, y: .infinity)
         precondition(visible.contains(invalid.frame(visible: visible)), "Corrupt stored positions must be safe")
+        for left in [false, true] {
+            let compact = RadioPlacement.tuckedFrame(anchor: tab, visible: visible, left: left, preview: true)
+            precondition(compact.size == CGSize(width: 190, height: 126) && visible.contains(compact))
+            precondition(RadioPlacement.antennaFrame(tucked: compact, visible: visible, left: left, preview: true) == tab)
+            let boundary = AntennaAnchor(x: left ? 0 : 1, y: 1).frame(visible: visible)
+            let onEdge = RadioPlacement.tuckedFrame(anchor: boundary, visible: visible, left: left, preview: true)
+            precondition(visible.contains(onEdge) && RadioPlacement.antennaFrame(tucked: onEdge, visible: visible, left: left, preview: true) == boundary)
+            precondition(RadioPlacement.tuckedFrame(anchor: tab, visible: visible, left: left, preview: false) == tab)
+        }
+        print("PASS compact Codex preview preserves antenna anchors, bounds and inverse drag mapping on both edges")
         print("PASS antenna size, normalized restore, upward expansion, tuck roundtrip, negative coordinates, clamp, monitor selection")
     }
 }

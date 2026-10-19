@@ -15,21 +15,32 @@ struct CodexUsageView: View {
     }
     private func content(now: Date) -> some View {
         let snapshot = monitor.snapshot
-        let events = snapshot?.events ?? []
+        let events = monitor.scopedEvents
         let usage = monitor.window.total(events, now: now)
         let unavailable = snapshot == nil || (snapshot?.issue != nil && events.isEmpty)
         return VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Codex").font(.system(size: 22, weight: .medium, design: .serif))
+                Text("Codex").font(.system(size: 20, weight: .medium, design: .serif))
                 Spacer()
-                Text(t(monitor.simulated ? "PREVIEW" : "ON THIS MAC")).font(.system(size: 8, weight: .semibold, design: .monospaced)).tracking(1)
+                Button { monitor.isChatPickerPresented = true } label: {
+                    HStack(spacing: 4) {
+                        Text(monitor.title(for: monitor.selectedSessionID, language: language)).lineLimit(1).truncationMode(.middle)
+                        Image(systemName: "chevron.down").font(.system(size: 7, weight: .semibold))
+                    }.font(.system(size: 10)).padding(.horizontal, 6).padding(.vertical, 5)
+                        .frame(maxWidth: 138)
+                        .background(Color.radioInk.opacity(0.06), in: RoundedRectangle(cornerRadius: 4))
+                        .overlay(RoundedRectangle(cornerRadius: 4).stroke(Color.radioInk.opacity(0.3), lineWidth: 0.6))
+                }.buttonStyle(.plain)
+                    .accessibilityLabel(t("Choose chat") + ", " + monitor.title(for: monitor.selectedSessionID, language: language))
+                    .help(t("Choose chat") + " · " + t(monitor.simulated ? "PREVIEW" : "ON THIS MAC"))
+                    .popover(isPresented: $monitor.isChatPickerPresented) { CodexChatPicker(monitor: monitor, language: language, classic: classic) }
                 Button { monitor.refresh() } label: {
                     Image(systemName: "arrow.clockwise").font(.system(size: 10)).frame(width: 22, height: 22)
                 }.buttonStyle(.plain).help(t("Read local activity")).accessibilityLabel(t("Read local activity"))
             }
             Rectangle().fill(Color.radioInk.opacity(0.3)).frame(height: 0.6).padding(.top, 5)
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(unavailable ? "—" : headline(usage.total)).font(.system(size: 30, weight: .medium, design: .monospaced)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.65)
+                Text(monitor.reading(now: now)).font(.system(size: 30, weight: .medium, design: .monospaced)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.65)
                 Text(t(monitor.window == .second ? "tokens / sec" : "tokens")).font(.system(size: 10))
                 Spacer(minLength: 0)
             }.padding(.top, 7)
@@ -66,19 +77,15 @@ struct CodexUsageView: View {
                 } else if let snapshot, snapshot.issue != nil || snapshot.warning != nil {
                     Button(t(snapshot.issue != nil ? "SAVED / UNAVAILABLE" : "PARTIAL HISTORY"), action: showSettings)
                         .buttonStyle(.plain).help(t("Some local records are unavailable. Counts may be incomplete."))
-                } else if let date = snapshot?.lastRecordedAt {
+                } else if let date = monitor.scopedLastRecordedAt {
                     Text(t("LAST RECORD")); Text(date, style: .relative)
                 } else { Text(t("NO RECORDED ACTIVITY")) }
                 Spacer(minLength: 0)
-                if let snapshot, (snapshot.issue != nil || snapshot.warning != nil), let date = snapshot.lastRecordedAt {
+                if let snapshot, (snapshot.issue != nil || snapshot.warning != nil), let date = monitor.scopedLastRecordedAt {
                     Text(date, format: .dateTime.hour().minute().second()).help(t("LAST RECORD"))
                 }
             }.font(.system(size: 8, design: .monospaced)).lineLimit(1).padding(.top, 7)
         }
-    }
-    private func headline(_ total: Int64) -> String {
-        if monitor.window == .second { return (Double(total) / 60).formatted(.number.precision(.fractionLength(1))) }
-        return total.formatted()
     }
     private func compact(_ count: Int64) -> String { count.formatted(.number.notation(.compactName)) }
     private func stateTitle(_ snapshot: CodexUsageSnapshot?) -> String {
@@ -121,6 +128,10 @@ struct CodexMonitorSettings: View {
         VStack(alignment: .leading, spacing: 9) {
             MoldedPlasticText(text: t("CODEX · LOCAL ACTIVITY"), size: 10, classic: classic, tracking: 1)
             Text(t("All Codex sessions on this Mac")).font(.system(size: 11, weight: .medium))
+            Toggle(t("Token preview beside antenna"), isOn: $monitor.showEdgePreview)
+                .font(.system(size: 11)).toggleStyle(RadioSlideSwitchStyle(classic: classic))
+            Text(t("Choose All chats or one chat on the Codex screen. The antenna preview follows that choice."))
+                .font(.system(size: 10)).fixedSize(horizontal: false, vertical: true)
             Text(monitor.rootDirectory.path).font(.system(size: 9, design: .monospaced)).textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
             HStack {
                 Button(t("Choose folder…")) { monitor.chooseFolder(language: language) }
