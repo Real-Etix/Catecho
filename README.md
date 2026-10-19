@@ -12,14 +12,14 @@ The screenshots show sample editions. The app fetches current information from t
 
 ## What it does
 
-- A draggable edge antenna, a floating radio window, and matching Classic and Flat appearances. With Codex enabled, the original slim antenna keeps a tiny live token readout on its cream base, then extends that base into a dashboard with white-gloved telescopic arms.
+- A draggable edge antenna, a floating radio window, and matching Classic and Flat appearances. With Codex enabled, the original slim antenna rests with a plain cream base, then extends that base into a token dashboard held by white-gloved telescopic arms.
 - A small, finite edition with source links, refresh status, and an offline cache.
 - AI news, GitHub trends, research, games, NBA, education, psychology, philosophy, science, and technology stations.
 - Multiple research topics at once, including AI and physics. GitHub shows recent star gains from Trending rather than lifetime-star rankings.
 - Custom stations: paste website links to discover RSS/Atom feeds, with a public-webpage reader as a fallback.
 - A back panel with physical-style controls, a mouse-driven flip, and a battery compartment that shows update activity.
 - English, Simplified Chinese, and Traditional Chinese interfaces. On supported Macs, Apple's on-device Translation framework can translate article snippets while keeping an Original toggle.
-- An optional Codex station for all local sessions or one selected chat: lifetime recorded token totals plus second/minute/hour activity views, with a recent activity chart, a tucked bot readout, and numeric-only local storage.
+- An optional Codex station for all local sessions or one selected chat: lifetime recorded token totals plus second/minute/hour activity views, with a recent activity chart, an expandable belly dashboard, and numeric-only local storage.
 - A first-launch tuning guide for topics, research subjects, language, and optional start at login, using the radio's own physical-style controls.
 
 Built with SwiftUI and AppKit. No app account, paid AI API, or cloud backend. A small [BSD-licensed Zstandard decoder](Vendor/Zstd/README.md) is bundled for compressed local Codex history; no extra installation is needed. Each Mac fetches its selected sources directly. Stories are publisher headlines and excerpts, not AI-written summaries.

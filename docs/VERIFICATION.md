@@ -1,4 +1,16 @@
-# Verification · v0.9.2
+# Verification · v0.9.3
+
+Checked on 19 October 2026. The compact widget now shows the vented cream base without an e-paper inset or token reading. The glove artwork is simplified to a padded rear mitten and a small front thumb.
+
+- Release build (23), strict ad-hoc signature verification and installed/built executable comparison passed.
+- The existing 1,818-pose geometry checks and native drag, reserved-frame reposition and compact/full-radio roundtrip checks passed. Token accounting and collection are unchanged; the full offline suite last passed in v0.9.1.
+- Reviewed compact and expanded native renders in Classic and Flat. The compact state contains no screen border or number; the mittens sit behind the casing and their thumbs overlap its front edge.
+- In the installed Traditional Chinese app, a coordinate click on the compact vented base opened the dashboard with live readings. Pulling the left grip inward retracted it. Compact accessibility labels now contain only the expansion action, with no hidden token reading. The widget was left compact.
+- All saved preferences exactly matched the pre-update export. The preceding app is retained locally for rollback.
+
+---
+
+## Previous verification · v0.9.2
 
 Checked on 19 October 2026. This revision changes only glove artwork, adds enlarged glove renders to the sample renderer, and increments the app version to build 22.
 

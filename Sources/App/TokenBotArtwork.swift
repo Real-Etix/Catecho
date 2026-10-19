@@ -26,10 +26,10 @@ struct TokenBotShell: View {
             }
             HStack(spacing: 3) {
                 ForEach(0..<3) { _ in
-                    Capsule().fill(Color.radioInk.opacity(0.45)).frame(width: 2, height: 3)
+                    Capsule().fill(Color.radioInk.opacity(0.45)).frame(width: 2, height: 9 - 6 * pose.progress)
                         .shadow(color: .white.opacity(classic ? 0.7 : 0), radius: 0, y: 0.6)
                 }
-            }.offset(y: pose.shellHeight / 2 - 4)
+            }.offset(y: CGFloat(pose.progress) * (pose.shellHeight / 2 - 4))
         }.frame(width: pose.shellWidth, height: pose.shellHeight).accessibilityHidden(true)
     }
 }
@@ -68,83 +68,57 @@ struct TokenBotArm: View {
     }
 }
 
-/// A connected, curled hand: unequal knuckles, an opposed thumb and a top cuff.
-/// Local coordinates stay inside the existing 29 × 38 grip envelope.
+enum TokenGloveLayer { case whole, rear, grip }
+
+/// A soft mitten sits behind the case; only its thumb crosses the front edge.
+/// Separating the layers makes it hold the screen instead of float on top of it.
 struct TokenBotGlove: View {
     let classic: Bool
     let right: Bool
+    var layer: TokenGloveLayer = .whole
     private var white: AnyShapeStyle {
-        classic ? AnyShapeStyle(LinearGradient(stops: [
-            .init(color: .white, location: 0),
-            .init(color: Color(red: 0.98, green: 0.975, blue: 0.955), location: 0.48),
-            .init(color: Color(red: 0.79, green: 0.78, blue: 0.73), location: 1)
-        ], startPoint: .topLeading, endPoint: .bottomTrailing)) : AnyShapeStyle(Color.white)
+        classic ? AnyShapeStyle(LinearGradient(colors: [.white, Color(red: 0.96, green: 0.95, blue: 0.92), Color(red: 0.81, green: 0.80, blue: 0.75)],
+                                               startPoint: .topLeading, endPoint: .bottomTrailing)) : AnyShapeStyle(Color.white)
     }
-    private var seam: Color { Color(red: 0.48, green: 0.47, blue: 0.41).opacity(classic ? 0.48 : 0.6) }
+    private var edge: Color { Color.radioInk.opacity(classic ? 0.23 : 0.35) }
     var body: some View {
         ZStack(alignment: .topLeading) {
-            cuff.fill(white)
-                .overlay(cuff.stroke(seam, lineWidth: 0.6))
-            palm.fill(white)
-                .overlay(palm.stroke(seam, style: StrokeStyle(lineWidth: 0.65, lineJoin: .round)))
-            // Short creases divide curled fingers without outlining separate pills.
-            fingerCreases.stroke(seam.opacity(0.8), style: StrokeStyle(lineWidth: 0.6, lineCap: .round))
-            thumb.fill(white)
-                .shadow(color: .black.opacity(classic ? 0.13 : 0), radius: 0.6, x: 0.6, y: 0.8)
-                .overlay(thumb.stroke(seam.opacity(0.8), style: StrokeStyle(lineWidth: 0.55, lineJoin: .round)))
-            if classic {
-                Path { p in
-                    p.move(to: CGPoint(x: 6.4, y: 24.5))
-                    p.addCurve(to: CGPoint(x: 10.5, y: 32.5), control1: CGPoint(x: 5.9, y: 28), control2: CGPoint(x: 7.5, y: 31.5))
-                }.stroke(.white.opacity(0.75), style: StrokeStyle(lineWidth: 1.1, lineCap: .round))
+            if layer != .grip {
+                RoundedRectangle(cornerRadius: 2).fill(white)
+                    .overlay(RoundedRectangle(cornerRadius: 2).stroke(edge, lineWidth: 0.5))
+                    .frame(width: 10, height: 6).offset(x: 10, y: 4)
+                mitten.fill(white)
+                    .overlay(mitten.stroke(edge, style: StrokeStyle(lineWidth: 0.55, lineJoin: .round)))
+                    .shadow(color: .black.opacity(classic ? 0.13 : 0), radius: 1, x: -0.5, y: 1)
+            }
+            if layer != .rear {
+                thumb.fill(white)
+                    .overlay(thumb.stroke(edge, style: StrokeStyle(lineWidth: 0.5, lineJoin: .round)))
+                    .shadow(color: .black.opacity(classic ? 0.16 : 0), radius: 0.8, x: 0.5, y: 1)
             }
         }.frame(width: 29, height: 38)
             .scaleEffect(x: right ? -1 : 1, y: 1)
-            .shadow(color: .black.opacity(classic ? 0.18 : 0), radius: 1.2, x: right ? -0.5 : 0.5, y: 1.2)
             .accessibilityHidden(true)
     }
-    private var cuff: Path {
+    private var mitten: Path {
         Path { p in
-            p.move(to: CGPoint(x: 9.5, y: 1.5))
-            p.addQuadCurve(to: CGPoint(x: 20.5, y: 1.5), control: CGPoint(x: 15, y: 0))
-            p.addLine(to: CGPoint(x: 21, y: 8))
-            p.addQuadCurve(to: CGPoint(x: 9, y: 8), control: CGPoint(x: 15, y: 10))
+            p.move(to: CGPoint(x: 11, y: 9))
+            p.addCurve(to: CGPoint(x: 22, y: 12), control1: CGPoint(x: 15, y: 8), control2: CGPoint(x: 20, y: 9))
+            p.addCurve(to: CGPoint(x: 23, y: 26), control1: CGPoint(x: 25, y: 16), control2: CGPoint(x: 25, y: 22))
+            p.addCurve(to: CGPoint(x: 15, y: 34), control1: CGPoint(x: 22, y: 32), control2: CGPoint(x: 19, y: 34))
+            p.addCurve(to: CGPoint(x: 5, y: 28), control1: CGPoint(x: 10, y: 35), control2: CGPoint(x: 6, y: 33))
+            p.addCurve(to: CGPoint(x: 6, y: 16), control1: CGPoint(x: 3.5, y: 24), control2: CGPoint(x: 4, y: 19))
+            p.addCurve(to: CGPoint(x: 11, y: 9), control1: CGPoint(x: 7, y: 13), control2: CGPoint(x: 9, y: 11))
             p.closeSubpath()
-        }
-    }
-    private var palm: Path {
-        Path { p in
-            p.move(to: CGPoint(x: 10, y: 7))
-            p.addCurve(to: CGPoint(x: 21, y: 11.5), control1: CGPoint(x: 15, y: 7), control2: CGPoint(x: 19, y: 7.5))
-            // Index, middle, ring and little finger form one tapered silhouette.
-            p.addCurve(to: CGPoint(x: 26, y: 20), control1: CGPoint(x: 29, y: 11), control2: CGPoint(x: 29, y: 17.5))
-            p.addCurve(to: CGPoint(x: 26, y: 26), control1: CGPoint(x: 29.5, y: 21), control2: CGPoint(x: 29, y: 24.5))
-            p.addCurve(to: CGPoint(x: 23, y: 31.5), control1: CGPoint(x: 28, y: 28.5), control2: CGPoint(x: 26, y: 31))
-            p.addCurve(to: CGPoint(x: 17, y: 36), control1: CGPoint(x: 24, y: 35), control2: CGPoint(x: 21, y: 36))
-            p.addCurve(to: CGPoint(x: 5, y: 32), control1: CGPoint(x: 11, y: 37), control2: CGPoint(x: 7, y: 35.5))
-            p.addCurve(to: CGPoint(x: 3, y: 21), control1: CGPoint(x: 2.5, y: 29), control2: CGPoint(x: 2, y: 24))
-            p.addCurve(to: CGPoint(x: 10, y: 7), control1: CGPoint(x: 3.5, y: 15), control2: CGPoint(x: 8, y: 12))
-            p.closeSubpath()
-        }
-    }
-    private var fingerCreases: Path {
-        Path { p in
-            p.move(to: CGPoint(x: 16, y: 19))
-            p.addCurve(to: CGPoint(x: 26, y: 20), control1: CGPoint(x: 20, y: 20.5), control2: CGPoint(x: 23, y: 21))
-            p.move(to: CGPoint(x: 14.5, y: 24.5))
-            p.addCurve(to: CGPoint(x: 26, y: 26), control1: CGPoint(x: 18, y: 26.5), control2: CGPoint(x: 22.5, y: 27))
-            p.move(to: CGPoint(x: 13.5, y: 30))
-            p.addCurve(to: CGPoint(x: 23, y: 31.5), control1: CGPoint(x: 16.5, y: 32), control2: CGPoint(x: 20, y: 33))
         }
     }
     private var thumb: Path {
         Path { p in
-            p.move(to: CGPoint(x: 6, y: 23))
-            p.addCurve(to: CGPoint(x: 7, y: 14), control1: CGPoint(x: 3.5, y: 20), control2: CGPoint(x: 4.5, y: 16))
-            p.addCurve(to: CGPoint(x: 16.5, y: 10.5), control1: CGPoint(x: 10, y: 12), control2: CGPoint(x: 12.5, y: 9))
-            p.addCurve(to: CGPoint(x: 18, y: 16), control1: CGPoint(x: 20, y: 11.5), control2: CGPoint(x: 20, y: 14))
-            p.addCurve(to: CGPoint(x: 13, y: 21), control1: CGPoint(x: 16, y: 17.5), control2: CGPoint(x: 14.5, y: 18.5))
-            p.addCurve(to: CGPoint(x: 6, y: 23), control1: CGPoint(x: 11.5, y: 24), control2: CGPoint(x: 8, y: 25))
+            p.move(to: CGPoint(x: 16, y: 15))
+            p.addCurve(to: CGPoint(x: 25, y: 15.5), control1: CGPoint(x: 19, y: 13), control2: CGPoint(x: 23, y: 13))
+            p.addCurve(to: CGPoint(x: 25.5, y: 22), control1: CGPoint(x: 28, y: 17), control2: CGPoint(x: 28, y: 20.5))
+            p.addCurve(to: CGPoint(x: 18, y: 21), control1: CGPoint(x: 23, y: 24), control2: CGPoint(x: 20, y: 23))
+            p.addQuadCurve(to: CGPoint(x: 16, y: 15), control: CGPoint(x: 15, y: 19))
             p.closeSubpath()
         }
     }

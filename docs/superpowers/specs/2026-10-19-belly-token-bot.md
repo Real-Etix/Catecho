@@ -1,5 +1,9 @@
 # Catecho belly token bot
 
+## Current simplification
+
+The user rejected the detailed glove revision and requested no token display at the original shrunk size. The compact 54 × 126 widget now has a plain vented cream base; token values and the e-paper inset appear only as it expands. Retain accessible base/glove activation. Replace the detailed fists with simple padded mitten grips behind the casing and a small thumb on the front edge. This supersedes the compact-readout and detailed-finger requirements below.
+
 ## Glove refinement
 
 The user found the fingers unnatural. Replace the repeated capsule fingers with a connected curved palm, staggered knuckles, an opposed bent thumb and a cuff aligned with the antenna arm. Keep the existing 29 × 38 drawing envelope, white fabric material, mirrored grip, compact size and interactions. Verify native renders at actual size and enlarged in both appearances.

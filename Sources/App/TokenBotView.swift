@@ -67,6 +67,10 @@ struct TokenBotPose: View, Animatable {
             ForEach([-1.0, 1.0], id: \.self) { side in
                 TokenBotArm(pose: pose, hand: side, classic: classic).allowsHitTesting(false)
             }
+            TokenBotGlove(classic: classic, right: false, layer: .rear).scaleEffect(pose.gloveScale)
+                .position(pose.leftGrip).allowsHitTesting(false)
+            TokenBotGlove(classic: classic, right: true, layer: .rear).scaleEffect(pose.gloveScale)
+                .position(pose.rightGrip).allowsHitTesting(false)
             TokenBotShell(classic: classic, pose: pose).position(x: pose.centerX, y: pose.shellY).allowsHitTesting(false)
             antenna.position(x: pose.centerX, y: pose.shellTop - 48.5)
             screen.position(x: pose.centerX, y: pose.screenY)
@@ -94,7 +98,7 @@ struct TokenBotPose: View, Animatable {
     }
     private func glove(right: Bool) -> some View {
         Button(action: toggle) {
-            TokenBotGlove(classic: classic, right: right).scaleEffect(pose.gloveScale)
+            TokenBotGlove(classic: classic, right: right, layer: .grip).scaleEffect(pose.gloveScale)
                 .frame(width: 10 + 20 * pose.progress, height: 18 + 22 * pose.progress).contentShape(Rectangle())
         }
             .buttonStyle(.plain)
@@ -107,16 +111,8 @@ struct TokenBotPose: View, Animatable {
     private var screen: some View {
         Button(action: toggle) {
             ZStack {
-                RoundedRectangle(cornerRadius: 3 + 5 * pose.progress)
-                    .fill(Color.radioPaper.shadow(.inner(color: .black.opacity(classic ? 0.22 : 0), radius: 1 + 2 * pose.progress, x: 0.5, y: 1)))
-                    .overlay(RoundedRectangle(cornerRadius: 3 + 5 * pose.progress).stroke(Color.radioInk.opacity(0.4), lineWidth: 0.6))
-                    .overlay(RoundedRectangle(cornerRadius: 3 + 5 * pose.progress).stroke(.white.opacity(classic ? 0.65 : 0), lineWidth: 0.5).offset(y: 0.7))
-                    .frame(width: pose.screenWidth, height: pose.screenHeight)
-                compactReading.opacity(1 - min(1, pose.progress * 2.5))
-                fullReading.frame(width: max(0, pose.screenWidth - 20)).fixedSize(horizontal: false, vertical: true)
-                    .scaleEffect(min(1, pose.screenHeight / 60))
-                    .opacity(max(0, (pose.progress - 0.35) / 0.65))
-                    .frame(width: max(0, pose.screenWidth - 20), height: pose.screenHeight - 4).clipped()
+                Color.clear
+                screenFace.opacity(min(1, max(0, (pose.progress - 0.12) / 0.5)))
             }
             .frame(width: pose.screenWidth, height: pose.screenHeight)
             .clipShape(RoundedRectangle(cornerRadius: 3 + 5 * pose.progress))
@@ -124,15 +120,25 @@ struct TokenBotPose: View, Animatable {
         }
         .buttonStyle(.plain)
         .foregroundStyle(Color.radioInk)
-        .help([t("Click the belly to expand or retract the token dashboard."), scope, t(status), t("Uses the selected time view; readings update about every five seconds while tucked.")].filter { !$0.isEmpty }.joined(separator: "\n"))
-        .accessibilityLabel([t(expanded ? "Retract token dashboard" : "Expand token dashboard"), scope, monitor.reading(now: now) + " " + unit, t(status)].filter { !$0.isEmpty }.joined(separator: ", "))
+        .help(expanded
+              ? [t("Click the belly to expand or retract the token dashboard."), scope, t(status)].filter { !$0.isEmpty }.joined(separator: "\n")
+              : t("Expand token dashboard"))
+        .accessibilityLabel(expanded
+                            ? [t("Retract token dashboard"), scope, monitor.reading(now: now) + " " + unit, t(status)].filter { !$0.isEmpty }.joined(separator: ", ")
+                            : t("Expand token dashboard"))
     }
-    private var compactReading: some View {
-        HStack(spacing: 1) {
-            Text(monitor.reading(now: now, compact: true)).font(.system(size: 8, weight: .semibold, design: .rounded))
-                .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
-            if !status.isEmpty { Circle().fill(Color.radioInk.opacity(0.7)).frame(width: 2, height: 2) }
-        }.frame(width: 26)
+    private var screenFace: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 3 + 5 * pose.progress)
+                .fill(Color.radioPaper.shadow(.inner(color: .black.opacity(classic ? 0.22 : 0), radius: 1 + 2 * pose.progress, x: 0.5, y: 1)))
+                .overlay(RoundedRectangle(cornerRadius: 3 + 5 * pose.progress).stroke(Color.radioInk.opacity(0.4), lineWidth: 0.6))
+                .overlay(RoundedRectangle(cornerRadius: 3 + 5 * pose.progress).stroke(.white.opacity(classic ? 0.65 : 0), lineWidth: 0.5).offset(y: 0.7))
+                .frame(width: pose.screenWidth, height: pose.screenHeight)
+            fullReading.frame(width: max(0, pose.screenWidth - 20)).fixedSize(horizontal: false, vertical: true)
+                .scaleEffect(min(1, pose.screenHeight / 60))
+                .opacity(max(0, (pose.progress - 0.35) / 0.65))
+                .frame(width: max(0, pose.screenWidth - 20), height: pose.screenHeight - 4).clipped()
+        }
     }
     private var fullReading: some View {
         VStack(alignment: .leading, spacing: 2) {
