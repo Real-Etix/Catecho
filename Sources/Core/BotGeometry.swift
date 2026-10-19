@@ -7,7 +7,8 @@ struct BotGeometry {
     static let compactWidth: CGFloat = 54
     static let height: CGFloat = 178
     static let compactHeight: CGFloat = 126
-    static let duration: Double = 0.44
+    static let openingDuration: Double = 0.72
+    static let closingDuration: Double = 0.44
     let progress: Double
     let left: Bool
     let originCorrection: CGFloat
@@ -19,9 +20,10 @@ struct BotGeometry {
         self.originCorrection = originCorrection.isFinite ? originCorrection : 0
         self.verticalCorrection = verticalCorrection.isFinite ? verticalCorrection : 0
     }
-    // One reversible timeline: emerge behind the small base, then pull it open.
-    var reachProgress: CGFloat { Self.smoothStep(CGFloat(progress) / 0.25) }
-    var pullProgress: CGFloat { Self.smoothStep((CGFloat(progress) - 0.25) / 0.75) }
+    // One reversible timeline: emerge, hold the grip briefly, then pull open.
+    // At opening speed these phases last 216 ms, 72 ms and 432 ms.
+    var reachProgress: CGFloat { Self.smoothStep(CGFloat(progress) / 0.3) }
+    var pullProgress: CGFloat { Self.smoothStep((CGFloat(progress) - 0.4) / 0.6) }
     var handOpacity: Double { Double(reachProgress) }
     var thumbOpacity: Double { Double(Self.smoothStep((reachProgress - 0.55) / 0.45)) }
     var handControlsAvailable: Bool { reachProgress == 1 }

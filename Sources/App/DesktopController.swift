@@ -244,7 +244,7 @@ final class DesktopController: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 finishBotRetraction()
             } else {
                 botRetraction = Task { [weak self] in
-                    try? await Task.sleep(for: .seconds(BotGeometry.duration + 0.04))
+                    try? await Task.sleep(for: .seconds(BotGeometry.closingDuration + 0.04))
                     guard !Task.isCancelled, let self, !self.model.isExpanded, !self.model.botExpanded else { return }
                     self.finishBotRetraction()
                 }

@@ -14,14 +14,21 @@ import CoreGraphics
             precondition(hidden.leftGrip.x - 14.5 * hidden.gloveScale > hidden.centerX - hidden.shellWidth / 2)
             precondition(hidden.rightGrip.x + 14.5 * hidden.gloveScale < hidden.centerX + hidden.shellWidth / 2,
                          "Hidden gloves start behind the base, not outside its edges")
-            let ready = BotGeometry(progress: 0.25, left: left)
+            let ready = BotGeometry(progress: 0.3, left: left)
             precondition(ready.reachProgress == 1 && ready.pullProgress == 0 && ready.handControlsAvailable)
             precondition(ready.thumbOpacity == 1 && ready.shellWidth == hidden.shellWidth,
                          "The gloves grip the casing before it starts expanding")
+            for progress in [0.32, 0.35, 0.38, 0.4] {
+                let holding = BotGeometry(progress: progress, left: left)
+                precondition(holding.leftGrip == ready.leftGrip && holding.rightGrip == ready.rightGrip,
+                             "Hands must visibly hold their grip before pulling")
+                precondition(holding.shellWidth == hidden.shellWidth && holding.shellHeight == hidden.shellHeight,
+                             "The original base stays still during the grip pause")
+            }
             let midpoint = BotGeometry(progress: 0.5, left: left)
             precondition(midpoint.reachProgress == 1 && midpoint.shellWidth > ready.shellWidth)
             // A reversal traverses the same poses; phase boundaries must not jump.
-            for boundary in [0.0, 0.25, 1.0] {
+            for boundary in [0.0, 0.3, 0.4, 1.0] {
                 let before = BotGeometry(progress: boundary - 0.00001, left: left)
                 let after = BotGeometry(progress: boundary + 0.00001, left: left)
                 precondition(abs(before.leftGrip.x - after.leftGrip.x) < 0.01)
@@ -97,6 +104,6 @@ import CoreGraphics
         precondition(BotGeometry.dragTarget(translation: CGSize(width: 30, height: 2), hand: -1) == false)
         precondition(BotGeometry.dragTarget(translation: CGSize(width: 1, height: 40), hand: 1) == nil)
         precondition(BotGeometry.dragTarget(translation: CGSize(width: 3, height: 1), hand: 1) == nil)
-        print("PASS hidden resting hands, reach-before-pull sequence, reversible phase continuity, original antenna footprint, both-axis placement, 1818 bounded poses and connected grips")
+        print("PASS hidden resting hands, reach-grip-pull sequence, stationary grip pause, reversible phase continuity, original antenna footprint, both-axis placement, 1818 bounded poses and connected grips")
     }
 }

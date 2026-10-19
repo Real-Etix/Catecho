@@ -1,4 +1,16 @@
-# Verification · v0.9.4
+# Verification · v0.9.5
+
+Checked on 19 October 2026. Opening now lasts 720 ms: 216 ms to emerge, 72 ms holding the base, and 432 ms pulling the dashboard open. Closing remains 440 ms, with the native window reservation released after the hands retract.
+
+- The grip-pause regression failed against the previous geometry and passed after the change. Focused checks cover the stationary hold, both phase boundaries, connected grips, hidden resting hands, and 1,818 bounded poses.
+- Release build (25), native window smoke checks and strict ad-hoc signature verification passed. The installed executable matches the built executable. The broader offline suite was not rerun for this timing adjustment.
+- Generated five native poses in both appearances and all three languages. Visually checked the grip hold and mid-pull in Classic.
+- In the installed Traditional Chinese app, base expansion and glove retraction worked. Opening followed immediately by Escape returned to the compact state. The final screenshot has no hands or token display, and its accessibility tree contains only the antenna and expansion buttons.
+- Saved preferences exactly match the pre-update export. The previous app is retained locally for rollback. The app was left compact. Reduce Motion still takes the immediate endpoint path; the system preference was not changed during testing.
+
+---
+
+## Previous verification · v0.9.4
 
 Checked on 19 October 2026. The hands and arms disappear completely at the original compact size. One reversible 440 ms timeline first brings them from behind the stationary base, then has them pull the dashboard open. Closing shrinks the dashboard before withdrawing the hands.
 

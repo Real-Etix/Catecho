@@ -24,7 +24,8 @@ struct TokenBotView: View {
                alignment: model.edge == "Left" ? .bottomLeading : .bottomTrailing)
         .clipped()
         .onChange(of: model.botExpanded) { _, value in
-            withAnimation(reduceMotion ? nil : .linear(duration: BotGeometry.duration)) { progress = value ? 1 : 0 }
+            let duration = value ? BotGeometry.openingDuration : BotGeometry.closingDuration
+            withAnimation(reduceMotion ? nil : .linear(duration: duration)) { progress = value ? 1 : 0 }
         }
         .onAppear { progress = model.botExpanded ? 1 : 0 }
         .preferredColorScheme(.light)
