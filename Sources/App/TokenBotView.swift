@@ -24,7 +24,7 @@ struct TokenBotView: View {
                alignment: model.edge == "Left" ? .bottomLeading : .bottomTrailing)
         .clipped()
         .onChange(of: model.botExpanded) { _, value in
-            withAnimation(reduceMotion ? nil : .timingCurve(0.22, 0.75, 0.18, 1, duration: BotGeometry.duration)) { progress = value ? 1 : 0 }
+            withAnimation(reduceMotion ? nil : .linear(duration: BotGeometry.duration)) { progress = value ? 1 : 0 }
         }
         .onAppear { progress = model.botExpanded ? 1 : 0 }
         .preferredColorScheme(.light)
@@ -52,7 +52,7 @@ struct TokenBotPose: View, Animatable {
     var animatableData: Double { get { progress } set { progress = newValue } }
     private var pose: BotGeometry { BotGeometry(progress: progress, left: left, originCorrection: originCorrection, verticalCorrection: verticalCorrection) }
     private func t(_ text: String) -> String { language.text(text) }
-    private var expanded: Bool { progress > 0.5 }
+    private var expanded: Bool { pose.pullProgress > 0.5 }
     private var scope: String { monitor.title(for: monitor.selectedSessionID, language: language) }
     private var unit: String { t(monitor.window == .second ? "tokens / sec" : "tokens") }
     private var status: String {
@@ -65,12 +65,12 @@ struct TokenBotPose: View, Animatable {
             AntennaArtwork(classic: classic, extensionAmount: antennaLift, showsBase: false)
                 .position(x: pose.centerX, y: pose.antennaY).allowsHitTesting(false)
             ForEach([-1.0, 1.0], id: \.self) { side in
-                TokenBotArm(pose: pose, hand: side, classic: classic).allowsHitTesting(false)
+                TokenBotArm(pose: pose, hand: side, classic: classic).opacity(pose.handOpacity).allowsHitTesting(false)
             }
             TokenBotGlove(classic: classic, right: false, layer: .rear).scaleEffect(pose.gloveScale)
-                .position(pose.leftGrip).allowsHitTesting(false)
+                .opacity(pose.handOpacity).position(pose.leftGrip).allowsHitTesting(false)
             TokenBotGlove(classic: classic, right: true, layer: .rear).scaleEffect(pose.gloveScale)
-                .position(pose.rightGrip).allowsHitTesting(false)
+                .opacity(pose.handOpacity).position(pose.rightGrip).allowsHitTesting(false)
             TokenBotShell(classic: classic, pose: pose).position(x: pose.centerX, y: pose.shellY).allowsHitTesting(false)
             antenna.position(x: pose.centerX, y: pose.shellTop - 48.5)
             screen.position(x: pose.centerX, y: pose.screenY)
@@ -98,13 +98,15 @@ struct TokenBotPose: View, Animatable {
     }
     private func glove(right: Bool) -> some View {
         Button(action: toggle) {
-            TokenBotGlove(classic: classic, right: right, layer: .grip).scaleEffect(pose.gloveScale)
-                .frame(width: 10 + 20 * pose.progress, height: 18 + 22 * pose.progress).contentShape(Rectangle())
+            TokenBotGlove(classic: classic, right: right, layer: .grip).scaleEffect(pose.gloveScale).opacity(pose.thumbOpacity)
+                .frame(width: 10 + 20 * pose.pullProgress, height: 18 + 22 * pose.pullProgress).contentShape(Rectangle())
         }
             .buttonStyle(.plain)
             .highPriorityGesture(DragGesture(minimumDistance: 8).onEnded { value in
                 if let target = BotGeometry.dragTarget(translation: value.translation, hand: right ? 1 : -1) { pull(target) }
             })
+            .allowsHitTesting(pose.handControlsAvailable)
+            .accessibilityHidden(!pose.handControlsAvailable)
             .help(t("Pull a glove outward to expand, inward to retract."))
             .accessibilityLabel(t(expanded ? "Retract token dashboard" : "Expand token dashboard"))
     }
@@ -112,11 +114,11 @@ struct TokenBotPose: View, Animatable {
         Button(action: toggle) {
             ZStack {
                 Color.clear
-                screenFace.opacity(min(1, max(0, (pose.progress - 0.12) / 0.5)))
+                screenFace.opacity(Double(min(1, max(0, (pose.pullProgress - 0.12) / 0.5))))
             }
             .frame(width: pose.screenWidth, height: pose.screenHeight)
-            .clipShape(RoundedRectangle(cornerRadius: 3 + 5 * pose.progress))
-            .contentShape(RoundedRectangle(cornerRadius: 3 + 5 * pose.progress))
+            .clipShape(RoundedRectangle(cornerRadius: 3 + 5 * pose.pullProgress))
+            .contentShape(RoundedRectangle(cornerRadius: 3 + 5 * pose.pullProgress))
         }
         .buttonStyle(.plain)
         .foregroundStyle(Color.radioInk)
@@ -129,14 +131,14 @@ struct TokenBotPose: View, Animatable {
     }
     private var screenFace: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 3 + 5 * pose.progress)
-                .fill(Color.radioPaper.shadow(.inner(color: .black.opacity(classic ? 0.22 : 0), radius: 1 + 2 * pose.progress, x: 0.5, y: 1)))
-                .overlay(RoundedRectangle(cornerRadius: 3 + 5 * pose.progress).stroke(Color.radioInk.opacity(0.4), lineWidth: 0.6))
-                .overlay(RoundedRectangle(cornerRadius: 3 + 5 * pose.progress).stroke(.white.opacity(classic ? 0.65 : 0), lineWidth: 0.5).offset(y: 0.7))
+            RoundedRectangle(cornerRadius: 3 + 5 * pose.pullProgress)
+                .fill(Color.radioPaper.shadow(.inner(color: .black.opacity(classic ? 0.22 : 0), radius: 1 + 2 * pose.pullProgress, x: 0.5, y: 1)))
+                .overlay(RoundedRectangle(cornerRadius: 3 + 5 * pose.pullProgress).stroke(Color.radioInk.opacity(0.4), lineWidth: 0.6))
+                .overlay(RoundedRectangle(cornerRadius: 3 + 5 * pose.pullProgress).stroke(.white.opacity(classic ? 0.65 : 0), lineWidth: 0.5).offset(y: 0.7))
                 .frame(width: pose.screenWidth, height: pose.screenHeight)
             fullReading.frame(width: max(0, pose.screenWidth - 20)).fixedSize(horizontal: false, vertical: true)
                 .scaleEffect(min(1, pose.screenHeight / 60))
-                .opacity(max(0, (pose.progress - 0.35) / 0.65))
+                .opacity(Double(max(0, (pose.pullProgress - 0.35) / 0.65)))
                 .frame(width: max(0, pose.screenWidth - 20), height: pose.screenHeight - 4).clipped()
         }
     }

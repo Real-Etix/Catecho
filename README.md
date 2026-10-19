@@ -12,7 +12,7 @@ The screenshots show sample editions. The app fetches current information from t
 
 ## What it does
 
-- A draggable edge antenna, a floating radio window, and matching Classic and Flat appearances. With Codex enabled, the original slim antenna rests with a plain cream base, then extends that base into a token dashboard held by white-gloved telescopic arms.
+- A draggable edge antenna, a floating radio window, and matching Classic and Flat appearances. With Codex enabled, the original slim antenna rests with a plain cream base and hidden hands. Clicking the base brings out white-gloved telescopic arms to pull open its token dashboard.
 - A small, finite edition with source links, refresh status, and an offline cache.
 - AI news, GitHub trends, research, games, NBA, education, psychology, philosophy, science, and technology stations.
 - Multiple research topics at once, including AI and physics. GitHub shows recent star gains from Trending rather than lifetime-star rankings.

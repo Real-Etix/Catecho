@@ -1,4 +1,16 @@
-# Verification · v0.9.3
+# Verification · v0.9.4
+
+Checked on 19 October 2026. The hands and arms disappear completely at the original compact size. One reversible 440 ms timeline first brings them from behind the stationary base, then has them pull the dashboard open. Closing shrinks the dashboard before withdrawing the hands.
+
+- The new reach-before-pull regression failed against the previous implementation and passed after the change. Focused checks cover fully hidden resting hands, inactive hidden controls, hand containment behind the base, grip-before-expansion, phase continuity on reversal, 1,818 bounded intermediate poses and both-axis placement.
+- Release build (24), native window smoke checks and strict ad-hoc signature verification passed. The installed executable matches the built executable. The broader offline suite was not rerun; this revision changes animation geometry and views only.
+- Generated five native animation poses for each of the three languages in Classic and Flat. Checked the compact, reaching, gripping, intermediate and open states; adjusted the vents to stay below the emerging e-paper inset.
+- In the installed Traditional Chinese app, the compact screenshot shows no hand, arm or token display. Its accessibility tree contains only the antenna and expansion controls. Opening reveals the glove controls and live dashboard; closing removes them. Opening immediately followed by Escape also returns to the compact state.
+- All saved preferences exactly matched the pre-update export. The prior app bundle remains available locally for rollback. The app was left shrunk. Reduce Motion retains the existing immediate endpoint switch; the system preference was not changed during testing.
+
+---
+
+## Previous verification · v0.9.3
 
 Checked on 19 October 2026. The compact widget now shows the vented cream base without an e-paper inset or token reading. The glove artwork is simplified to a padded rear mitten and a small front thumb.
 

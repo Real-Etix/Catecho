@@ -50,7 +50,7 @@ struct LittleRadioApp {
         }
         for language in [RadioLanguage.english, .simplified, .traditional] {
             for classic in [true, false] {
-                for progress in [0.0, 0.5, 1.0] {
+                for progress in [0.0, 0.125, 0.25, 0.5, 1.0] {
                     let content = TokenBotPose(progress: progress, left: false, classic: classic, monitor: model.codex, language: language, now: Date())
                         .padding(20).background(Color(red: 0.96, green: 0.95, blue: 0.92)).preferredColorScheme(.light)
                     let name = "bot-\(classic ? "Classic" : "Flat")-\(language.rawValue)-\(Int(progress * 100)).png"

@@ -1,5 +1,9 @@
 # Catecho belly token bot
 
+## Retractable hands
+
+The user requested completely hidden hands at the original shrunk size, then an emergence from behind the base to pull the token dashboard open. A single reversible 440 ms timeline spends its first quarter reaching around the stationary base and the rest pulling it open. The rear mitten and arm are concealed by the case while the thumb joins the front only after the hand reaches the edge. Closing reverses the sequence. Hidden gloves have no hit targets or accessibility controls. The base remains the expansion button, with no resting token display. Reduce Motion switches directly between the same endpoint poses. This supersedes the 280 ms simultaneous expansion and always-visible hand descriptions below.
+
 ## Current simplification
 
 The user rejected the detailed glove revision and requested no token display at the original shrunk size. The compact 54 × 126 widget now has a plain vented cream base; token values and the e-paper inset appear only as it expands. Retain accessible base/glove activation. Replace the detailed fists with simple padded mitten grips behind the casing and a small thumb on the front edge. This supersedes the compact-readout and detailed-finger requirements below.

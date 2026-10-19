@@ -3,6 +3,32 @@ import CoreGraphics
 
 @main struct BotTests {
     static func main() {
+        let reaching = BotGeometry(progress: 0.2, left: false)
+        precondition(reaching.shellWidth == 42 && reaching.shellHeight == 26,
+                     "Hands must emerge before they pull the original base open")
+        precondition(reaching.reachProgress > 0 && reaching.pullProgress == 0)
+        for left in [true, false] {
+            let hidden = BotGeometry(progress: 0, left: left)
+            precondition(hidden.handOpacity == 0 && hidden.thumbOpacity == 0 && !hidden.handControlsAvailable,
+                         "Resting hands, thumbs and their controls must be completely hidden")
+            precondition(hidden.leftGrip.x - 14.5 * hidden.gloveScale > hidden.centerX - hidden.shellWidth / 2)
+            precondition(hidden.rightGrip.x + 14.5 * hidden.gloveScale < hidden.centerX + hidden.shellWidth / 2,
+                         "Hidden gloves start behind the base, not outside its edges")
+            let ready = BotGeometry(progress: 0.25, left: left)
+            precondition(ready.reachProgress == 1 && ready.pullProgress == 0 && ready.handControlsAvailable)
+            precondition(ready.thumbOpacity == 1 && ready.shellWidth == hidden.shellWidth,
+                         "The gloves grip the casing before it starts expanding")
+            let midpoint = BotGeometry(progress: 0.5, left: left)
+            precondition(midpoint.reachProgress == 1 && midpoint.shellWidth > ready.shellWidth)
+            // A reversal traverses the same poses; phase boundaries must not jump.
+            for boundary in [0.0, 0.25, 1.0] {
+                let before = BotGeometry(progress: boundary - 0.00001, left: left)
+                let after = BotGeometry(progress: boundary + 0.00001, left: left)
+                precondition(abs(before.leftGrip.x - after.leftGrip.x) < 0.01)
+                precondition(abs(before.shellWidth - after.shellWidth) < 0.01)
+                precondition(abs(before.thumbOpacity - after.thumbOpacity) < 0.01)
+            }
+        }
         let visible = CGRect(x: -1440, y: -300, width: 1440, height: 900)
         for left in [true, false] {
             for x in [CGFloat(0), 0.5, 1] {
@@ -43,8 +69,13 @@ import CoreGraphics
                 let pose = BotGeometry(progress: Double(step) / 100, left: left)
                 precondition(pose.shellWidth >= 42 && pose.shellWidth <= 216)
                 precondition(pose.shellHeight >= 26 && pose.shellHeight <= 78)
-                precondition(pose.leftGrip.x == pose.centerX - pose.shellWidth / 2 - 1 - 2 * pose.progress)
-                precondition(pose.rightGrip.x == pose.centerX + pose.shellWidth / 2 + 1 + 2 * pose.progress)
+                if pose.handControlsAvailable {
+                    precondition(abs(pose.leftGrip.x - (pose.centerX - pose.shellWidth / 2 - 1 - 2 * pose.pullProgress)) < 0.01)
+                    precondition(abs(pose.rightGrip.x - (pose.centerX + pose.shellWidth / 2 + 1 + 2 * pose.pullProgress)) < 0.01)
+                    precondition(pose.leftGrip.y == pose.screenY && pose.rightGrip.y == pose.screenY)
+                } else {
+                    precondition(pose.shellWidth == 42 && pose.shellHeight == 26)
+                }
             }
             let dx: CGFloat = left ? 206 : -206
             let dy: CGFloat = -52
@@ -66,6 +97,6 @@ import CoreGraphics
         precondition(BotGeometry.dragTarget(translation: CGSize(width: 30, height: 2), hand: -1) == false)
         precondition(BotGeometry.dragTarget(translation: CGSize(width: 1, height: 40), hand: 1) == nil)
         precondition(BotGeometry.dragTarget(translation: CGSize(width: 3, height: 1), hand: 1) == nil)
-        print("PASS original antenna footprint, both-axis reservation and drag continuity at every boundary, 1818 bounded poses, connected grips and intentional pulls")
+        print("PASS hidden resting hands, reach-before-pull sequence, reversible phase continuity, original antenna footprint, both-axis placement, 1818 bounded poses and connected grips")
     }
 }
