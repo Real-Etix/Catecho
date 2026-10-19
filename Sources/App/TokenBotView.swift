@@ -11,7 +11,7 @@ struct TokenBotView: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             TokenBotPose(progress: progress, left: model.edge == "Left", classic: model.isClassic, originCorrection: model.botOriginCorrection,
-                         verticalCorrection: model.botVerticalCorrection,
+                         verticalCorrection: model.botVerticalCorrection, compactInteraction: !model.botRoomReserved,
                          antennaLift: antennaLift, monitor: monitor, language: model.language, now: context.date,
                          toggle: { model.onBotExpansion?(!model.botExpanded) },
                          pull: { model.onBotExpansion?($0) },
@@ -39,6 +39,7 @@ struct TokenBotPose: View, Animatable {
     let classic: Bool
     var originCorrection: CGFloat = 0
     var verticalCorrection: CGFloat = 0
+    var compactInteraction = false
     var antennaLift: CGFloat = 0
     let monitor: CodexMonitorModel
     let language: RadioLanguage
@@ -77,8 +78,11 @@ struct TokenBotPose: View, Animatable {
             screen.position(x: pose.centerX, y: pose.screenY)
             glove(right: false).position(pose.leftGrip)
             glove(right: true).position(pose.rightGrip)
-            WindowDragHandle(hint: t("Drag the bot's base to move Catecho"), onStarted: dragBegan, onEnded: dragEnded, onFinished: moved)
-                .frame(width: pose.shellWidth - 8, height: 8).position(x: pose.centerX, y: pose.bottomY - 4)
+            WindowDragHandle(hint: t(compactInteraction ? "Drag anywhere on the base to move. Click to open the dashboard." : "Drag the bot's base to move Catecho"),
+                             onStarted: dragBegan, onEnded: dragEnded, onClick: compactInteraction ? toggle : nil, onFinished: moved)
+                .frame(width: compactInteraction ? 54 : pose.shellWidth - 8, height: compactInteraction ? 32 : 8)
+                .position(x: pose.centerX, y: compactInteraction ? pose.shellY : pose.bottomY - 4)
+                .accessibilityHidden(true)
         }
         .frame(width: BotGeometry.fullWidth, height: BotGeometry.height)
     }
@@ -125,7 +129,7 @@ struct TokenBotPose: View, Animatable {
         .foregroundStyle(Color.radioInk)
         .help(expanded
               ? [t("Click the belly to expand or retract the token dashboard."), scope, t(status)].filter { !$0.isEmpty }.joined(separator: "\n")
-              : t("Expand token dashboard"))
+              : t("Drag anywhere on the base to move. Click to open the dashboard."))
         .accessibilityLabel(expanded
                             ? [t("Retract token dashboard"), scope, monitor.reading(now: now) + " " + unit, t(status)].filter { !$0.isEmpty }.joined(separator: ", ")
                             : t("Expand token dashboard"))

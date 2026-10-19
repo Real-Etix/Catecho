@@ -1,4 +1,15 @@
-# Verification · v0.9.5
+# Verification · v0.9.6
+
+Checked on 20 October 2026. The compact bot’s full cream base now supports dragging, with a 54 × 32-point target instead of the 34 × 8-point bottom strip. Clicks still expand the dashboard; movement below four points is tolerated as click jitter.
+
+- The native compact hit-area regression failed against the previous implementation and passed after the fix. All nine probes across the base reach the native drag handler. Native checks also pass for click jitter without movement, dragging without opening, returning a drag to its origin, release-only movement, balanced tracking callbacks, and existing window/reposition/retraction behavior.
+- Focused bot geometry and language suites passed. Release build (26), strict ad-hoc signature verification and installed/built executable comparison passed. The broader offline suite was not rerun; data collection and accounting are unchanged.
+- In the installed Traditional Chinese app, a coordinate drag from the middle of the base moved the widget on both axes without opening it. Only saved placement changed. A reverse drag from the upper base restored its original position. A coordinate click on the same base opened the live dashboard, and the glove retracted it.
+- After verification, all saved preferences—including position—exactly matched the pre-update export. The app was left compact, with hidden hands and only the antenna/expansion accessibility controls. The previous installed app is retained locally for rollback.
+
+---
+
+## Previous verification · v0.9.5
 
 Checked on 19 October 2026. Opening now lasts 720 ms: 216 ms to emerge, 72 ms holding the base, and 432 ms pulling the dashboard open. Closing remains 440 ms, with the native window reservation released after the hands retract.
 

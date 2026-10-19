@@ -1,5 +1,9 @@
 # Catecho belly token bot
 
+## Compact dragging · 20 October 2026
+
+The whole compact cream base, with a small invisible margin, accepts window dragging (54 × 32 points). A movement of 4 points starts dragging; a release below that threshold opens the dashboard. Once dragging begins, returning to the start cannot trigger a click. Keep the original compact appearance, antenna reveal gesture, and expanded lower-rim handle. The native tracking guard prevents window retraction during a held drag.
+
 ## Retractable hands
 
 The user requested completely hidden hands at the original shrunk size, then an emergence from behind the base to pull the token dashboard open. A single reversible timeline opens over 720 ms: the hands emerge for 216 ms, hold their grip on the stationary base for 72 ms, then pull the dashboard open for 432 ms. Closing traverses the same poses over 440 ms. This slower opening follows the user’s request to clearly see each action. The rear mitten and arm are concealed by the case while the thumb joins the front only after the hand reaches the edge. Closing reverses the sequence. Hidden gloves have no hit targets or accessibility controls. The base remains the expansion button, with no resting token display. Reduce Motion switches directly between the same endpoint poses. This supersedes the 280 ms simultaneous expansion and always-visible hand descriptions below.

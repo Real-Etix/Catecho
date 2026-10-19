@@ -6,23 +6,26 @@ struct WindowDragHandle: NSViewRepresentable {
     var hint: String = "Drag to move Catecho"
     var onStarted: (() -> Void)? = nil
     var onEnded: (() -> Void)? = nil
+    var onClick: (() -> Void)? = nil
     let onFinished: () -> Void
     func makeNSView(context: Context) -> WindowDragHandleView {
         let view = WindowDragHandleView()
         view.onFinished = onFinished
-        view.onStarted = onStarted; view.onEnded = onEnded
+        view.onStarted = onStarted; view.onEnded = onEnded; view.onClick = onClick
         view.toolTip = hint
         return view
     }
-    func updateNSView(_ view: WindowDragHandleView, context: Context) { view.onFinished = onFinished; view.onStarted = onStarted; view.onEnded = onEnded; view.toolTip = hint }
+    func updateNSView(_ view: WindowDragHandleView, context: Context) { view.onFinished = onFinished; view.onStarted = onStarted; view.onEnded = onEnded; view.onClick = onClick; view.toolTip = hint }
 }
 
 final class WindowDragHandleView: NSView {
     var onFinished: (() -> Void)?
     var onStarted: (() -> Void)?
     var onEnded: (() -> Void)?
+    var onClick: (() -> Void)?
     private var dragOrigin: CGPoint?
     private var pointerOrigin: CGPoint?
+    private var didDrag = false
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override var mouseDownCanMoveWindow: Bool { false }
     override func resetCursorRects() { addCursorRect(bounds, cursor: .openHand) }
@@ -30,20 +33,27 @@ final class WindowDragHandleView: NSView {
         guard let window else { return }
         dragOrigin = window.frame.origin
         pointerOrigin = window.convertPoint(toScreen: event.locationInWindow)
+        didDrag = false
         onStarted?()
     }
     override func mouseDragged(with event: NSEvent) {
         guard let window, let dragOrigin, let pointerOrigin else { return }
         let pointer = window.convertPoint(toScreen: event.locationInWindow)
+        let delta = CGPoint(x: pointer.x - pointerOrigin.x, y: pointer.y - pointerOrigin.y)
+        // A clickable base tolerates hand jitter. Once dragging starts, returning
+        // to the original position must never turn the gesture back into a click.
+        guard onClick == nil || didDrag || hypot(delta.x, delta.y) >= 4 else { return }
+        didDrag = true
         window.setFrameOrigin(CGPoint(x: dragOrigin.x + pointer.x - pointerOrigin.x,
                                       y: dragOrigin.y + pointer.y - pointerOrigin.y))
     }
     override func mouseUp(with event: NSEvent) {
-        defer { dragOrigin = nil; pointerOrigin = nil; onEnded?() }
+        defer { dragOrigin = nil; pointerOrigin = nil; didDrag = false; onEnded?() }
         guard let window, let dragOrigin else { return }
         mouseDragged(with: event)
         // Commit only at release; a header click must preserve the original tuck anchor.
         if window.frame.origin != dragOrigin { onFinished?() }
+        else if !didDrag && bounds.contains(convert(event.locationInWindow, from: nil)) { onClick?() }
     }
 }
 

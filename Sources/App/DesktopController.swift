@@ -301,6 +301,7 @@ final class DesktopController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         smokeCheck(panel.level.rawValue > NSWindow.Level.normal.rawValue)
         smokeCheck(!panel.hidesOnDeactivate)
         if showsCodexPreview {
+            verifyCompactBaseDragArea()
             setBotExpanded(true, animated: false)
             smokeCheck(panel.frame.width == BotGeometry.fullWidth && panel.frame.height == BotGeometry.height && screen.visibleFrame.contains(panel.frame))
             model.onBotDragBegan?()
@@ -343,6 +344,20 @@ final class DesktopController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         anchor = savedAnchor; savePlacement(); position()
         print("PASS native reserved drag → display reposition → retract preserves both axes")
     }
+    private func verifyCompactBaseDragArea() {
+        guard let root = panel.contentView else { fatalError("Missing compact content") }
+        root.layoutSubtreeIfNeeded()
+        // Probe the actual compact hosting view, including its middle and upper base.
+        for x: CGFloat in [8, 27, 46] {
+            for y: CGFloat in [7, 16, 25] {
+                let point = root.superview?.convert(CGPoint(x: x, y: y), from: nil) ?? CGPoint(x: x, y: y)
+                var hit = root.hitTest(point)
+                while let view = hit, !(view is WindowDragHandleView) { hit = view.superview }
+                smokeCheck(hit is WindowDragHandleView, "The whole compact cream base must accept window dragging at \(x), \(y)")
+            }
+        }
+        print("PASS native compact drag area: centre and all base edges")
+    }
     private func verifyDragTracking() {
         let testWindow = NSPanel(contentRect: CGRect(x: 100, y: 100, width: 374, height: 416), styleMask: [.borderless], backing: .buffered, defer: false)
         let handle = WindowDragHandleView(frame: CGRect(x: 0, y: 0, width: 374, height: 416))
@@ -362,5 +377,31 @@ final class DesktopController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         handle.mouseUp(with: event(.leftMouseUp, 25, 25))
         smokeCheck(commits == 1 && testWindow.frame.origin == CGPoint(x: 120, y: 155))
         print("PASS native drag: no-op click, movement before release, final release coordinate, single commit")
+
+        var clicks = 0, starts = 0, ends = 0
+        handle.onClick = { clicks += 1 }
+        handle.onStarted = { starts += 1 }; handle.onEnded = { ends += 1 }
+        handle.mouseDown(with: event(.leftMouseDown, 20, 20))
+        handle.mouseDragged(with: event(.leftMouseDragged, 22, 21))
+        handle.mouseUp(with: event(.leftMouseUp, 22, 21))
+        smokeCheck(clicks == 1 && commits == 1 && testWindow.frame.origin == CGPoint(x: 120, y: 155),
+                   "Small click jitter must open the dashboard without moving it")
+        handle.mouseDown(with: event(.leftMouseDown, 20, 20))
+        handle.mouseDragged(with: event(.leftMouseDragged, 30, 20))
+        handle.mouseUp(with: event(.leftMouseUp, 20, 20))
+        smokeCheck(clicks == 1 && commits == 2 && testWindow.frame.origin == CGPoint(x: 130, y: 155),
+                   "Dragging the clickable base must move without opening")
+        handle.mouseDown(with: event(.leftMouseDown, 20, 20))
+        handle.mouseDragged(with: event(.leftMouseDragged, 30, 20))
+        handle.mouseDragged(with: event(.leftMouseDragged, 10, 20))
+        handle.mouseUp(with: event(.leftMouseUp, 20, 20))
+        smokeCheck(clicks == 1 && commits == 2 && testWindow.frame.origin == CGPoint(x: 130, y: 155),
+                   "Returning a drag to its starting point must not become a click")
+        handle.mouseDown(with: event(.leftMouseDown, 20, 20))
+        handle.mouseUp(with: event(.leftMouseUp, 35, 20))
+        smokeCheck(clicks == 1 && commits == 3 && testWindow.frame.origin == CGPoint(x: 145, y: 155),
+                   "A displaced release must move even without an intermediate drag event")
+        smokeCheck(starts == 4 && ends == 4, "Every base press must release the window-resize guard")
+        print("PASS native clickable base: click jitter, drag without opening, return-to-origin, release-only movement and balanced tracking")
     }
 }

@@ -95,6 +95,7 @@ enum RadioLanguage: String, CaseIterable {
         "Expand token dashboard": ("展开 Token 面板", "展開 Token 面板"),
         "Retract token dashboard": ("收起 Token 面板", "收起 Token 面板"),
         "Drag the bot's base to move Catecho": ("拖动机器人的底座来移动 Catecho", "拖曳機器人的底座來移動 Catecho"),
+        "Drag anywhere on the base to move. Click to open the dashboard.": ("拖动底座任意位置即可移动，点按可打开面板。", "拖曳底座任意位置即可移動，點按可打開面板。"),
         "Pull a glove outward to expand, inward to retract.": ("向外拉手套展开，向内推收起。", "向外拉手套展開，向內推收起。"),
         "Click the belly to expand or retract the token dashboard.": ("点击肚子展开或收起 Token 面板。", "點擊肚子展開或收起 Token 面板。"),
         "Choose All chats or one chat on the Codex screen. The antenna preview follows that choice.": ("在 Codex 屏幕选择所有对话或单个对话，天线旁的预览会跟随此选择。", "在 Codex 螢幕選擇所有對話或單一對話，天線旁的預覽會跟隨此選擇。"),
