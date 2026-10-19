@@ -71,71 +71,130 @@ actor CodexUsageCollector {
         fractionalDate.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
     }
 
+    // Discovery and refresh budgets are independent of the content byte budget.
+    private static let candidateLimit = 64
+    private static let inventoryLimit = 10_000
+    private static let inventoryRefresh: TimeInterval = 15
+    private struct InventoryFile {
+        let url: URL
+        var generation: Int
+        var known = false
+        var size: UInt64 = 0
+        var inode: UInt64 = 0
+        var modified: Date = .distantPast
+        var unreadable = false
+    }
+    private struct DirectorySignature: Equatable {
+        let inode: UInt64
+        let modified: Date
+    }
+    private final class DiscoveryStatus { var failed = false }
+    private final class Discovery {
+        var iterators: [FileManager.DirectoryEnumerator] = []
+        var index = 0
+        let generation: Int
+        let signatures: [String: DirectorySignature]
+        let status = DiscoveryStatus()
+        init(generation: Int, signatures: [String: DirectorySignature]) {
+            self.generation = generation; self.signatures = signatures
+        }
+    }
+    private var inventory: [String: InventoryFile] = [:]
+    private var inventoryOrder: [String] = []
+    private var metadataQueue: [String] = []
+    private var metadataHead = 0
+    private var sweepIndex = 0
+    private var hotPaths: [String] = []
+    private var discovery: Discovery?
+    private var discoveryGeneration = 0
+    private var hasDiscovered = false
+    private var discoveryUnreadable = false
+    private var lastDiscoveryAt = Date.distantPast
+    private var directorySignatures: [String: DirectorySignature] = [:]
+
     func poll(now: Date = Date()) async -> CodexUsageSnapshot {
         loadHistory(now: now)
         let retained = events.filter { $0.value.recordedAt >= now.addingTimeInterval(-86400) && $0.value.recordedAt <= now }
         if retained.count != events.count { historyDirty = true }
         events = retained
         if events.isEmpty { historyWasLimited = false }
-        var bytesRead = 0
-        var issue: CodexUsageIssue?
+        if Task.isCancelled {
+            saveHistory()
+            return snapshot(now, issue: nil, bytes: 0, pending: !hasDiscovered || discovery != nil || hasPendingFiles, scanned: scannedFiles, total: inventory.count)
+        }
         let fm = FileManager.default
-        var directory: ObjCBool = false
-        guard fm.fileExists(atPath: root.path, isDirectory: &directory), directory.boolValue else {
+        let rootAttributes: [FileAttributeKey: Any]
+        do { rootAttributes = try fm.attributesOfItem(atPath: root.path) }
+        catch {
+            saveHistory()
+            return snapshot(now, issue: isMissing(error) ? .missingFolder : .unreadable, bytes: 0, pending: false, scanned: 0, total: 0)
+        }
+        guard rootAttributes[.type] as? FileAttributeType == .typeDirectory else {
+            saveHistory()
             return snapshot(now, issue: .missingFolder, bytes: 0, pending: false, scanned: 0, total: 0)
         }
-        var paths: [(URL, UInt64, UInt64, Date)] = []
+        guard permitsReading(rootAttributes, directory: true) else {
+            saveHistory()
+            return snapshot(now, issue: .unreadable, bytes: 0, pending: false, scanned: 0, total: inventory.count)
+        }
+        var issue: CodexUsageIssue?
+        // Three fixed directory probes detect removal/recreation and direct additions promptly.
+        var signatures: [String: DirectorySignature] = [:]
+        var folders: [URL] = []
         for name in ["sessions", "archived_sessions"] {
             let folder = root.appendingPathComponent(name)
-            guard fm.fileExists(atPath: folder.path) else { continue }
-            guard readable(folder) else { issue = .unreadable; continue }
-            var enumerationFailed = false
-            guard let iterator = fm.enumerator(at: folder, includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles], errorHandler: { _, _ in enumerationFailed = true; return false }) else { issue = .unreadable; continue }
-            for case let url as URL in iterator {
-                if url.lastPathComponent.contains(".jsonl.") {
-                    warnings.insert("Compressed or unsupported rollout files were skipped; history is partial.")
-                    continue
-                }
-                guard url.pathExtension == "jsonl" else { continue }
-                guard let attrs = try? fm.attributesOfItem(atPath: url.path), attrs[.type] as? FileAttributeType == .typeRegular else { issue = .unreadable; continue }
-                paths.append((url, (attrs[.size] as? NSNumber)?.uint64Value ?? 0, (attrs[.systemFileNumber] as? NSNumber)?.uint64Value ?? 0, attrs[.modificationDate] as? Date ?? .distantPast))
-            }
-            if enumerationFailed { issue = .unreadable }
-        }
-        paths.sort { $0.0.path < $1.0.path }
-        let currentPaths = Set(paths.map { $0.0.path })
-        files = files.filter { currentPaths.contains($0.key) }
-        if paths.isEmpty && issue == nil { issue = .noLogs }
-        // Complete the current file before starting another, bounding aggregate line buffering.
-        let ordered = paths.sorted {
-            let left = files[$0.0.path].map { !$0.tail.isEmpty } ?? false
-            let right = files[$1.0.path].map { !$0.tail.isEmpty } ?? false
-            return left != right ? left : $0.0.path < $1.0.path
-        }
-        for (url, size, inode, modified) in ordered {
-            if Task.isCancelled { break }
-            var cursor = files[url.path] ?? Cursor()
-            if cursor.inode != inode || size < cursor.offset || (size == cursor.offset && modified != cursor.modified) {
-                cursor = Cursor()
-            }
-            cursor.inode = inode; cursor.modified = modified
-            guard cursor.offset < size else { files[url.path] = cursor; continue }
-            guard bytesRead < Self.pollBudget else { files[url.path] = cursor; continue }
-            guard readable(url), let handle = try? FileHandle(forReadingFrom: url) else {
-                issue = .unreadable; files[url.path] = cursor; continue
-            }
-            defer { try? handle.close() }
             do {
+                let attrs = try fm.attributesOfItem(atPath: folder.path)
+                guard attrs[.type] as? FileAttributeType == .typeDirectory, permitsReading(attrs, directory: true) else { issue = .unreadable; continue }
+                signatures[folder.path] = DirectorySignature(inode: (attrs[.systemFileNumber] as? NSNumber)?.uint64Value ?? 0, modified: attrs[.modificationDate] as? Date ?? .distantPast)
+                folders.append(folder)
+            } catch { if !isMissing(error) { issue = .unreadable } }
+        }
+        if discovery == nil && (!hasDiscovered || signatures != directorySignatures || now.timeIntervalSince(lastDiscoveryAt) >= Self.inventoryRefresh) {
+            discoveryGeneration += 1
+            discoveryUnreadable = false
+            let scan = Discovery(generation: discoveryGeneration, signatures: signatures)
+            for folder in folders {
+                let status = scan.status
+                if let iterator = fm.enumerator(at: folder, includingPropertiesForKeys: [], options: [], errorHandler: { _, _ in status.failed = true; return false }) { scan.iterators.append(iterator) }
+                else { scan.status.failed = true }
+            }
+            discovery = scan
+        }
+        discover(now: now, allowPruning: issue == nil)
+        if discoveryUnreadable || discovery?.status.failed == true { issue = .unreadable }
+        let checked = refreshMetadata()
+        if inventory.values.contains(where: { $0.unreadable }) { issue = .unreadable }
+        var bytesRead = 0
+        var selected: [String] = []
+        var selectedSet: Set<String> = []
+        for path in hotPaths + checked {
+            if let entry = inventory[path], needsRead(path, entry), selectedSet.insert(path).inserted { selected.append(path) }
+        }
+        for path in inventoryOrder where selected.count < Self.candidateLimit {
+            if let entry = inventory[path], needsRead(path, entry), selectedSet.insert(path).inserted { selected.append(path) }
+        }
+        // Content opens, metadata candidates and discovery entries all have explicit limits.
+        for path in selected.prefix(Self.candidateLimit) {
+            if Task.isCancelled || bytesRead >= Self.pollBudget { break }
+            guard var entry = inventory[path], entry.known, !entry.unreadable else { continue }
+            var cursor = files[path] ?? Cursor()
+            if cursor.inode != entry.inode || entry.size < cursor.offset || (entry.size == cursor.offset && entry.modified != cursor.modified) { cursor = Cursor() }
+            cursor.inode = entry.inode; cursor.modified = entry.modified
+            guard cursor.offset < entry.size else { files[path] = cursor; continue }
+            do {
+                let handle = try FileHandle(forReadingFrom: entry.url)
+                defer { try? handle.close() }
                 try handle.seek(toOffset: cursor.offset)
-                while cursor.offset < size && bytesRead < Self.pollBudget && !Task.isCancelled {
-                    let length = min(256 * 1024, Self.pollBudget - bytesRead, Int(min(size - cursor.offset, UInt64(Int.max))))
+                while cursor.offset < entry.size && bytesRead < Self.pollBudget && !Task.isCancelled {
+                    let length = min(256 * 1024, Self.pollBudget - bytesRead, Int(min(entry.size - cursor.offset, UInt64(Int.max))))
                     guard let chunk = try handle.read(upToCount: length), !chunk.isEmpty else { break }
                     bytesRead += chunk.count; cursor.offset += UInt64(chunk.count)
                     consume(chunk, cursor: &cursor, now: now)
                 }
-            } catch { issue = .unreadable }
+            } catch { issue = .unreadable; entry.unreadable = true; inventory[path] = entry }
             if cursor.tail.isEmpty { cursor.tail = Data() }
-            files[url.path] = cursor
+            files[path] = cursor
         }
         if files.values.reduce(0, { $0 + $1.tail.count }) > 16 * 1024 * 1024 {
             warnings.insert("Incomplete rollout lines exceeded the memory limit; history is partial.")
@@ -143,19 +202,100 @@ actor CodexUsageCollector {
                 files[path]?.tail.removeAll(keepingCapacity: false); files[path]?.skippingLine = true
             }
         }
-        let scanned = paths.filter { files[$0.0.path]?.offset == $0.1 }.count
-        let pending = paths.contains { item in
-            guard readable(item.0) else { return false }
-            return (files[item.0.path]?.offset ?? 0) < item.1
-        }
-        boundHistory()
-        saveHistory()
-        return snapshot(now, issue: issue, bytes: bytesRead, pending: pending, scanned: scanned, total: paths.count)
+        if inventory.isEmpty && discovery == nil && hasDiscovered && issue == nil { issue = .noLogs }
+        boundHistory(); saveHistory()
+        return snapshot(now, issue: issue, bytes: bytesRead, pending: discovery != nil || signatures != directorySignatures || hasPendingFiles, scanned: scannedFiles, total: inventory.count)
     }
-
-    private func readable(_ url: URL) -> Bool {
-        guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path), let mode = attrs[.posixPermissions] as? NSNumber else { return false }
-        return mode.intValue & 0o444 != 0 && FileManager.default.isReadableFile(atPath: url.path)
+    private var hasPendingFiles: Bool {
+        inventory.contains { !$0.value.known || needsRead($0.key, $0.value) }
+    }
+    private var scannedFiles: Int {
+        inventory.filter { $0.value.known && !$0.value.unreadable && !needsRead($0.key, $0.value) }.count
+    }
+    private func needsRead(_ path: String, _ entry: InventoryFile) -> Bool {
+        guard entry.known, !entry.unreadable else { return false }
+        guard let cursor = files[path] else { return true }
+        return cursor.inode != entry.inode || entry.size != cursor.offset || entry.modified != cursor.modified
+    }
+    private func isMissing(_ error: Error) -> Bool {
+        let error = error as NSError
+        return (error.domain == NSCocoaErrorDomain && [NSFileNoSuchFileError, NSFileReadNoSuchFileError].contains(error.code)) || (error.domain == NSPOSIXErrorDomain && error.code == ENOENT)
+    }
+    private func permitsReading(_ attrs: [FileAttributeKey: Any], directory: Bool = false) -> Bool {
+        let mode = (attrs[.posixPermissions] as? NSNumber)?.intValue ?? 0
+        return mode & 0o444 != 0 && (!directory || mode & 0o111 != 0)
+    }
+    private func discover(now: Date, allowPruning: Bool) {
+        guard let scan = discovery else { return }
+        var visited = 0
+        while scan.index < scan.iterators.count && visited < Self.candidateLimit && !Task.isCancelled {
+            let iterator = scan.iterators[scan.index]
+            guard let url = iterator.nextObject() as? URL else { scan.index += 1; continue }
+            visited += 1
+            if url.lastPathComponent.hasPrefix(".") { iterator.skipDescendants(); continue }
+            if url.lastPathComponent.contains(".jsonl.") {
+                warnings.insert("Compressed or unsupported rollout files were skipped; history is partial."); continue
+            }
+            guard url.pathExtension == "jsonl" else { continue }
+            if var entry = inventory[url.path] { entry.generation = scan.generation; inventory[url.path] = entry }
+            else if inventory.count < Self.inventoryLimit {
+                inventory[url.path] = InventoryFile(url: url, generation: scan.generation)
+                inventoryOrder.append(url.path); metadataQueue.append(url.path)
+            } else { warnings.insert("The rollout inventory exceeded the local file limit; history is partial.") }
+        }
+        guard scan.index == scan.iterators.count else { return }
+        if allowPruning && !scan.status.failed {
+            let removed = inventory.filter { $0.value.generation != scan.generation }.map { $0.key }
+            for path in removed { inventory.removeValue(forKey: path); files.removeValue(forKey: path) }
+        }
+        inventoryOrder.removeAll { inventory[$0] == nil }
+        hotPaths.removeAll { inventory[$0] == nil }
+        hasDiscovered = true; lastDiscoveryAt = now; directorySignatures = scan.signatures
+        discoveryUnreadable = scan.status.failed
+        if scan.status.failed { warnings.insert("Some rollout directories could not be enumerated; history is partial.") }
+        discovery = nil
+    }
+    private func refreshMetadata() -> [String] {
+        var selected: [String] = []
+        var seen: Set<String> = []
+        func select(_ path: String) {
+            if inventory[path] != nil && seen.insert(path).inserted { selected.append(path) }
+        }
+        for path in hotPaths.prefix(8) { select(path) }
+        var visited = 0
+        while metadataHead < metadataQueue.count && selected.count < Self.candidateLimit && visited < Self.candidateLimit {
+            select(metadataQueue[metadataHead]); metadataHead += 1; visited += 1
+        }
+        if metadataHead == metadataQueue.count { metadataQueue.removeAll(keepingCapacity: true); metadataHead = 0 }
+        else if metadataHead >= 1024 { metadataQueue.removeFirst(metadataHead); metadataHead = 0 }
+        visited = 0
+        while selected.count < Self.candidateLimit && visited < min(inventoryOrder.count, Self.candidateLimit) {
+            if sweepIndex >= inventoryOrder.count { sweepIndex = 0 }
+            select(inventoryOrder[sweepIndex]); sweepIndex += 1; visited += 1
+        }
+        for path in selected {
+            if Task.isCancelled { break }
+            guard var entry = inventory[path] else { continue }
+            do {
+                let attrs = try FileManager.default.attributesOfItem(atPath: path)
+                guard attrs[.type] as? FileAttributeType == .typeRegular else { entry.known = true; entry.unreadable = true; inventory[path] = entry; continue }
+                entry.known = true
+                entry.size = (attrs[.size] as? NSNumber)?.uint64Value ?? 0
+                entry.inode = (attrs[.systemFileNumber] as? NSNumber)?.uint64Value ?? 0
+                entry.modified = attrs[.modificationDate] as? Date ?? .distantPast
+                entry.unreadable = !permitsReading(attrs)
+                inventory[path] = entry
+            } catch {
+                if isMissing(error) { inventory.removeValue(forKey: path); files.removeValue(forKey: path) }
+                else { entry.known = true; entry.unreadable = true; inventory[path] = entry }
+            }
+        }
+        hotPaths = Array(Set(hotPaths + selected)).filter { inventory[$0] != nil }.sorted {
+            let left = inventory[$0]?.modified ?? .distantPast
+            let right = inventory[$1]?.modified ?? .distantPast
+            return left == right ? $0 < $1 : left > right
+        }.prefix(8).map { $0 }
+        return selected
     }
     private func consume(_ chunk: Data, cursor: inout Cursor, now: Date) {
         chunk.withUnsafeBytes { raw in
@@ -215,7 +355,14 @@ actor CodexUsageCollector {
             if let previous {
                 if previous == current { return }
                 if current.input >= previous.input && current.output >= previous.output && current.cachedInput >= previous.cachedInput && current.reasoning >= previous.reasoning {
-                    delta = CodexTokenUsage(input: current.input - previous.input, cachedInput: current.cachedInput - previous.cachedInput, output: current.output - previous.output, reasoning: current.reasoning - previous.reasoning)
+                    let input = current.input - previous.input
+                    let output = current.output - previous.output
+                    let cached = current.cachedInput - previous.cachedInput
+                    let reasoning = current.reasoning - previous.reasoning
+                    if cached > input || reasoning > output {
+                        warnings.insert("Cumulative subset counters changed inconsistently; cached input and reasoning deltas were limited to raw usage.")
+                    }
+                    delta = CodexTokenUsage(input: input, cachedInput: min(input, cached), output: output, reasoning: min(output, reasoning))
                 } else { delta = p.info?.last_token_usage?.value }
             } else { delta = p.info?.last_token_usage?.value }
             guard let delta else { warnings.insert("A cumulative counter had no reliable baseline; history is partial."); return }

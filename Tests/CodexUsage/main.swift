@@ -54,6 +54,59 @@ func check(_ condition: @autoclosure () -> Bool, _ message: String) {
             print("LIVE polls=\(polls) bytes=\(bytes) seconds=\(Date().timeIntervalSince(started)) files=\(s.filesScanned)/\(s.filesTotal) events=\(s.events.count) incrementalBytes=\(incremental.bytesRead) warning=\(s.warning ?? "none")")
             return
         }
+        let review = folder(); defer { try? FileManager.default.removeItem(at: review) }
+        let firstCounts = ["input_tokens": 100, "cached_input_tokens": 0, "output_tokens": 10, "reasoning_output_tokens": 0]
+        let nextCounts = ["input_tokens": 110, "cached_input_tokens": 50, "output_tokens": 20, "reasoning_output_tokens": 15]
+        write(meta("nonuniform") + json("event_msg", ["type": "token_count", "info": ["total_token_usage": firstCounts]], at: -20) + json("event_msg", ["type": "token_count", "info": ["total_token_usage": nextCounts]], at: -10), review)
+        let reviewedCache = review.appendingPathComponent("numeric.json")
+        let reviewed = CodexUsageCollector(rootDirectory: review, historyURL: reviewedCache)
+        var reviewedSnapshot = await settled(reviewed)
+        check(reviewedSnapshot.events.count == 1 && reviewedSnapshot.events[0].usage.total == 20 && reviewedSnapshot.events[0].usage.cachedInput <= 10 && reviewedSnapshot.events[0].usage.reasoning <= 10 && reviewedSnapshot.warning != nil, "nonuniform cumulative changes preserve raw delta and validate subsets with warning")
+        let nonuniformRestart = await settled(CodexUsageCollector(rootDirectory: review, historyURL: reviewedCache))
+        check(nonuniformRestart.events == reviewedSnapshot.events, "validated cumulative deltas survive restart unchanged")
+        try! FileManager.default.removeItem(at: review.appendingPathComponent("sessions"))
+        try! FileManager.default.removeItem(at: review)
+        try! FileManager.default.createDirectory(at: review, withIntermediateDirectories: true)
+        // Keep the cache outside the unavailable source root to verify actual disk expiry.
+        let retainedCache = FileManager.default.temporaryDirectory.appendingPathComponent("CatechoReviewCache-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: retainedCache) }
+        let unavailableRoot = review.appendingPathComponent("absent")
+        let encodedHistory: [String: Any] = ["version": 1, "events": [["id": "response:expiry", "sessionID": "expiry", "recordedAt": now.addingTimeInterval(-10).timeIntervalSinceReferenceDate, "usage": ["input": 10, "cachedInput": 5, "output": 2, "reasoning": 1]]]]
+        try! JSONSerialization.data(withJSONObject: encodedHistory).write(to: retainedCache)
+        let absent = CodexUsageCollector(rootDirectory: unavailableRoot, historyURL: retainedCache)
+        reviewedSnapshot = await absent.poll(now: now)
+        check(reviewedSnapshot.events.count == 1 && reviewedSnapshot.issue == .missingFolder, "missing source retains still-valid cached usage")
+        reviewedSnapshot = await absent.poll(now: now.addingTimeInterval(86400))
+        let expiredDisk = try! JSONSerialization.jsonObject(with: Data(contentsOf: retainedCache)) as! [String: Any]
+        check(reviewedSnapshot.events.isEmpty && (expiredDisk["events"] as! [Any]).isEmpty, "missing source persists expiry pruning to the numeric cache")
+        let many = folder(); defer { try? FileManager.default.removeItem(at: many) }
+        for i in 0..<600 { write(meta("many-\(i)") + record("initial-\(i)", session: "many-\(i)"), many, "\(i).jsonl") }
+        try! FileManager.default.createDirectory(at: many.appendingPathComponent("sessions/nested"), withIntermediateDirectories: true)
+        let boundedDiscovery = CodexUsageCollector(rootDirectory: many)
+        reviewedSnapshot = await boundedDiscovery.poll(now: now)
+        check(reviewedSnapshot.isIndexing && reviewedSnapshot.filesTotal > 0 && reviewedSnapshot.filesTotal <= 64, "directory discovery is bounded and reports unfinished discovery")
+        reviewedSnapshot = await settled(boundedDiscovery)
+        check(reviewedSnapshot.events.count == 600 && reviewedSnapshot.filesTotal == 600, "bounded discovery eventually visits every retained rollout")
+        for i in 0..<600 { append(record("append-\(i)", session: "many-\(i)"), many, "\(i).jsonl") }
+        reviewedSnapshot = await boundedDiscovery.poll(now: now)
+        let appendedInOnePoll = reviewedSnapshot.events.filter { $0.id.hasPrefix("response:append-") }.count
+        check(appendedInOnePoll > 0 && appendedInOnePoll <= 64, "cached inventory limits per-poll metadata refresh candidates")
+        reviewedSnapshot = await settled(boundedDiscovery, at: now.addingTimeInterval(16))
+        // Routine background metadata cycles are bounded; allow one complete sweep.
+        for _ in 0..<12 { reviewedSnapshot = await boundedDiscovery.poll(now: now.addingTimeInterval(16)) }
+        check(reviewedSnapshot.events.count == 1200, "bounded metadata sweeps eventually observe appended usage")
+        write(meta("nested") + record("nested-new", session: "nested"), many, "nested/new.jsonl")
+        reviewedSnapshot = await boundedDiscovery.poll(now: now.addingTimeInterval(16))
+        check(reviewedSnapshot.filesTotal == 600 && !reviewedSnapshot.events.contains { $0.id == "response:nested-new" }, "inventory is cached between refresh cycles for unchanged top directories")
+        reviewedSnapshot = await settled(boundedDiscovery, at: now.addingTimeInterval(32))
+        check(reviewedSnapshot.filesTotal == 601 && reviewedSnapshot.events.contains { $0.id == "response:nested-new" }, "periodic bounded refresh discovers nested additions")
+        let activePath = many.appendingPathComponent("sessions/0.jsonl")
+        try! FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(100)], ofItemAtPath: activePath.path)
+        for _ in 0..<12 { _ = await boundedDiscovery.poll(now: now.addingTimeInterval(32)) }
+        append(record("hot-append", session: "many-0"), many, "0.jsonl")
+        for i in 600..<900 { write(meta("many-\(i)"), many, "\(i).jsonl") }
+        reviewedSnapshot = await boundedDiscovery.poll(now: now.addingTimeInterval(32))
+        check(reviewedSnapshot.isIndexing && reviewedSnapshot.events.contains { $0.id == "response:hot-append" }, "known active appends remain prompt during incremental discovery")
         let root = folder(); defer { try? FileManager.default.removeItem(at: root) }
         let cache = root.appendingPathComponent("history.json")
         write(meta("s") + record("r1") + count(100, last: 100) + record("r1") + record("r2", input: 200), root)
@@ -120,6 +173,14 @@ func check(_ condition: @autoclosure () -> Bool, _ message: String) {
         try! FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: unreadable.appendingPathComponent("sessions/a.jsonl").path)
         s = await CodexUsageCollector(rootDirectory: unreadable).poll(now: now)
         check(s.issue == .unreadable, "unreadable logs are distinguished")
+        try! FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: unreadable.appendingPathComponent("sessions/a.jsonl").path)
+        let restricted = unreadable.appendingPathComponent("sessions/restricted")
+        try! FileManager.default.createDirectory(at: restricted, withIntermediateDirectories: true)
+        try! Data(meta("restricted").utf8).write(to: restricted.appendingPathComponent("hidden.jsonl"))
+        try! FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: restricted.path)
+        let inaccessibleDirectory = await CodexUsageCollector(rootDirectory: unreadable).poll(now: now)
+        try! FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: restricted.path)
+        check(inaccessibleDirectory.issue == .unreadable, "directory enumeration failures retain unreadable source status")
         let sourceUnavailable = root.appendingPathComponent("temporarily-missing")
         let savedCache = root.appendingPathComponent("saved-cache.json")
         try! validHistory.write(to: savedCache)
