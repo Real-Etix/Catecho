@@ -201,8 +201,8 @@ actor CodexUsageCollector {
                 defer { try? handle.close() }
                 try handle.seek(toOffset: cursor.offset)
                 if compressed {
-                    if cursor.zstd == nil && files.values.filter({ $0.zstd != nil }).count >= 2 { continue }
-                    readCompressed(handle, size: entry.size, cursor: &cursor, bytes: &bytesRead, decoded: &decodedBytes, now: now)
+                    if cursor.zstd == nil && files.filter({ $0.key != path && $0.value.zstd != nil }).count >= 2 { continue }
+                    try readCompressed(handle, size: entry.size, cursor: &cursor, bytes: &bytesRead, decoded: &decodedBytes, now: now)
                 } else {
                     while cursor.offset < entry.size && bytesRead < Self.pollBudget && decodedBytes < Self.pollBudget && !Task.isCancelled {
                         let length = min(256 * 1024, Self.pollBudget - bytesRead, Self.pollBudget - decodedBytes, Int(min(entry.size - cursor.offset, UInt64(Int.max))))
@@ -211,7 +211,10 @@ actor CodexUsageCollector {
                         consume(chunk, cursor: &cursor, now: now)
                     }
                 }
-            } catch { issue = .unreadable; entry.unreadable = true; inventory[path] = entry }
+            } catch {
+                issue = .unreadable; entry.unreadable = true; inventory[path] = entry
+                if compressed { files.removeValue(forKey: path); continue }
+            }
             if cursor.tail.isEmpty { cursor.tail = Data() }
             files[path] = cursor
         }
@@ -255,7 +258,7 @@ actor CodexUsageCollector {
             visited += 1
             if url.lastPathComponent.hasPrefix(".") { iterator.skipDescendants(); continue }
             if url.lastPathComponent.contains(".jsonl.") && !url.lastPathComponent.hasSuffix(".jsonl.zst") {
-                warnings.insert("Compressed or unsupported rollout files were skipped; history is partial."); continue
+                warnings.insert("Unsupported rollout compression was skipped; history is partial."); continue
             }
             guard url.pathExtension == "jsonl" || url.lastPathComponent.hasSuffix(".jsonl.zst") else { continue }
             if var entry = inventory[url.path] { entry.generation = scan.generation; inventory[url.path] = entry }
@@ -299,17 +302,21 @@ actor CodexUsageCollector {
             guard var entry = inventory[path] else { continue }
             do {
                 let attrs = try FileManager.default.attributesOfItem(atPath: path)
-                guard attrs[.type] as? FileAttributeType == .typeRegular else { entry.known = true; entry.unreadable = true; inventory[path] = entry; continue }
                 entry.known = true
-                entry.size = (attrs[.size] as? NSNumber)?.uint64Value ?? 0
-                entry.inode = (attrs[.systemFileNumber] as? NSNumber)?.uint64Value ?? 0
-                entry.modified = attrs[.modificationDate] as? Date ?? .distantPast
-                entry.unreadable = !permitsReading(attrs)
+                if attrs[.type] as? FileAttributeType == .typeRegular {
+                    entry.size = (attrs[.size] as? NSNumber)?.uint64Value ?? 0
+                    entry.inode = (attrs[.systemFileNumber] as? NSNumber)?.uint64Value ?? 0
+                    entry.modified = attrs[.modificationDate] as? Date ?? .distantPast
+                    entry.unreadable = !permitsReading(attrs)
+                } else { entry.unreadable = true }
                 inventory[path] = entry
             } catch {
                 if isMissing(error) { inventory.removeValue(forKey: path); files.removeValue(forKey: path) }
                 else { entry.known = true; entry.unreadable = true; inventory[path] = entry }
             }
+            // Restart inaccessible archives from zero after recovery; retaining their
+            // decoder would reserve a bounded context that can no longer advance.
+            if path.hasSuffix(".jsonl.zst"), inventory[path]?.unreadable == true { files.removeValue(forKey: path) }
         }
         hotPaths = Array(Set(hotPaths + selected)).filter { inventory[$0] != nil }.sorted {
             let left = inventory[$0]?.modified ?? .distantPast
@@ -318,14 +325,17 @@ actor CodexUsageCollector {
         }.prefix(8).map { $0 }
         return selected
     }
-    private func readCompressed(_ handle: FileHandle, size: UInt64, cursor: inout Cursor, bytes: inout Int, decoded: inout Int, now: Date) {
+    private func readCompressed(_ handle: FileHandle, size: UInt64, cursor: inout Cursor, bytes: inout Int, decoded: inout Int, now: Date) throws {
         do {
             if cursor.zstd == nil { cursor.zstd = try CodexZstd() }
             while decoded < Self.pollBudget && !Task.isCancelled {
                 if cursor.compressedInput.isEmpty && cursor.offset < size {
                     guard bytes < Self.pollBudget else { break }
                     let length = min(256 * 1024, Self.pollBudget - bytes, Int(min(size - cursor.offset, UInt64(Int.max))))
-                    guard let data = try handle.read(upToCount: length), !data.isEmpty else { throw CompressedReadError.truncated }
+                    let data: Data?
+                    do { data = try handle.read(upToCount: length) }
+                    catch { throw CompressedReadError.unreadable(error) }
+                    guard let data, !data.isEmpty else { throw CompressedReadError.truncated }
                     cursor.compressedInput = data; cursor.offset += UInt64(data.count); bytes += data.count
                 }
                 let chunk = try cursor.zstd!.decode(cursor.compressedInput, outputLimit: min(256 * 1024, Self.pollBudget - decoded))
@@ -343,13 +353,14 @@ actor CodexUsageCollector {
                     if !cursor.compressedInput.isEmpty { throw CompressedReadError.invalid }
                 }
             }
-        } catch {
+        } catch CompressedReadError.unreadable(let error) { throw error }
+        catch {
             warnings.insert("Some compressed rollout history could not be decoded (invalid, incomplete, or beyond the 8 MiB window limit); history is partial.")
             cursor.zstd = nil; cursor.compressedInput = Data(); cursor.compressedFinished = true; cursor.offset = size
             cursor.tail = Data(); cursor.projection = nil; cursor.skippingLine = false
         }
     }
-    private enum CompressedReadError: Error { case truncated, invalid }
+    private enum CompressedReadError: Error { case truncated, invalid, unreadable(Error) }
     private func consume(_ chunk: Data, cursor: inout Cursor, now: Date) {
         chunk.withUnsafeBytes { raw in
             guard let base = raw.baseAddress else { return }

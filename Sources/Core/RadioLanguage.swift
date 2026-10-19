@@ -38,10 +38,11 @@ enum RadioLanguage: String, CaseIterable {
     }
     private static let diagnosticFragments = [
         "Incomplete rollout lines exceeded the memory limit; history is partial.",
-        "Compressed or unsupported rollout files were skipped; history is partial.",
+        "Unsupported rollout compression was skipped; history is partial.",
         "The rollout inventory exceeded the local file limit; history is partial.",
         "Some rollout directories could not be enumerated; history is partial.",
-        "An oversized rollout line was skipped; history is partial.",
+        "Some oversized rollout records could not be decoded within the structural limits; history is partial.",
+        "Some compressed rollout history could not be decoded (invalid, incomplete, or beyond the 8 MiB window limit); history is partial.",
         "Some rollout records could not be decoded; history is partial.",
         "An oversized session identifier was skipped; history is partial.",
         "Usage without session identity was skipped; history is partial.",
@@ -69,10 +70,11 @@ enum RadioLanguage: String, CaseIterable {
     ]
     static let strings: [String: (String, String)] = [
         "Incomplete rollout lines exceeded the memory limit; history is partial.": ("未完成的记录超过内存限制，历史记录不完整。", "未完成的記錄超過記憶體限制，歷史記錄不完整。"),
-        "Compressed or unsupported rollout files were skipped; history is partial.": ("已跳过压缩或不支持的记录文件，历史记录不完整。", "已略過壓縮或不支援的記錄檔案，歷史記錄不完整。"),
+        "Unsupported rollout compression was skipped; history is partial.": ("已跳过不支持的压缩记录，历史记录不完整。", "已略過不支援的壓縮記錄，歷史記錄不完整。"),
         "The rollout inventory exceeded the local file limit; history is partial.": ("记录文件数超过本机限制，历史记录不完整。", "記錄檔案數超過本機限制，歷史記錄不完整。"),
         "Some rollout directories could not be enumerated; history is partial.": ("无法列出部分记录文件夹，历史记录不完整。", "無法列出部分記錄資料夾，歷史記錄不完整。"),
-        "An oversized rollout line was skipped; history is partial.": ("已跳过过大的单条记录，历史记录不完整。", "已略過過大的單筆記錄，歷史記錄不完整。"),
+        "Some oversized rollout records could not be decoded within the structural limits; history is partial.": ("部分大型记录无法在结构限制内解析，历史记录不完整。", "部分大型記錄無法在結構限制內解析，歷史記錄不完整。"),
+        "Some compressed rollout history could not be decoded (invalid, incomplete, or beyond the 8 MiB window limit); history is partial.": ("部分压缩记录无效、不完整或超过 8 MiB 解压窗口限制，历史记录不完整。", "部分壓縮記錄無效、不完整或超過 8 MiB 解壓視窗限制，歷史記錄不完整。"),
         "Some rollout records could not be decoded; history is partial.": ("无法解析部分记录，历史记录不完整。", "無法解析部分記錄，歷史記錄不完整。"),
         "An oversized session identifier was skipped; history is partial.": ("已跳过过长的会话标识，历史记录不完整。", "已略過過長的對話識別碼，歷史記錄不完整。"),
         "Usage without session identity was skipped; history is partial.": ("已跳过缺少会话标识的用量，历史记录不完整。", "已略過缺少對話識別碼的用量，歷史記錄不完整。"),

@@ -96,10 +96,26 @@ func check(_ condition: @autoclosure () -> Bool, _ message: String) {
         compressedSnapshot = await settled(archiveCollector)
         check(compressedSnapshot.events.count == 6 && !compressedSnapshot.isIndexing, "replaced incomplete archive retries safely and deduplicates recovered responses")
         let manyCompressed = folder(); defer { try? FileManager.default.removeItem(at: manyCompressed) }
-        for index in 0..<70 { try! largeArchive.write(to: manyCompressed.appendingPathComponent("sessions/\(index).jsonl.zst")) }
+        for index in 0..<70 { try! (index < 3 ? largeArchive : numericArchive).write(to: manyCompressed.appendingPathComponent("sessions/\(index).jsonl.zst")) }
         let manyArchiveCollector = CodexUsageCollector(rootDirectory: manyCompressed)
         compressedSnapshot = await settled(manyArchiveCollector)
-        check(compressedSnapshot.filesScanned == 70 && compressedSnapshot.events.count == 2 && compressedSnapshot.warning == nil, "many expanding archives finish with bounded contexts and shared response deduplication")
+        check(compressedSnapshot.filesScanned == 70 && compressedSnapshot.events.count == 4 && compressedSnapshot.warning == nil, "many expanding archives finish with bounded contexts and shared response deduplication")
+        let permissionRoot = folder(); defer { try? FileManager.default.removeItem(at: permissionRoot) }
+        let permissionCollector = CodexUsageCollector(rootDirectory: permissionRoot)
+        for name in ["a", "b"] {
+            let url = permissionRoot.appendingPathComponent("sessions/" + name + ".jsonl.zst")
+            try! largeArchive.write(to: url)
+            _ = await permissionCollector.poll(now: now)
+            try! FileManager.default.setAttributes([.posixPermissions: 0], ofItemAtPath: url.path)
+        }
+        try! largeArchive.write(to: permissionRoot.appendingPathComponent("sessions/c.jsonl.zst"))
+        compressedSnapshot = await permissionCollector.poll(now: now)
+        check(compressedSnapshot.bytesRead > 0, "unreadable in-progress archives release decoder slots for other files")
+        compressedSnapshot = await settled(permissionCollector)
+        check(compressedSnapshot.events.count == 2 && compressedSnapshot.issue == .unreadable, "readable history still finishes while inaccessible archives report their gap")
+        for name in ["a", "b"] { try! FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: permissionRoot.appendingPathComponent("sessions/" + name + ".jsonl.zst").path) }
+        compressedSnapshot = await settled(permissionCollector)
+        check(compressedSnapshot.filesScanned == 3 && compressedSnapshot.events.count == 2 && compressedSnapshot.issue == nil, "restored archive permissions restart decoding and preserve deduplication")
         let review = folder(); defer { try? FileManager.default.removeItem(at: review) }
         let firstCounts = ["input_tokens": 100, "cached_input_tokens": 0, "output_tokens": 10, "reasoning_output_tokens": 0]
         let nextCounts = ["input_tokens": 110, "cached_input_tokens": 50, "output_tokens": 20, "reasoning_output_tokens": 15]
