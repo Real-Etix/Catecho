@@ -41,6 +41,13 @@ struct LittleRadioApp {
         model.configuration.enabledChannels = ["codex"]
         model.codex.window = .lifetime
         model.codex.selectSession("preview-old")
+        for classic in [true, false] {
+            let detail = HStack(spacing: 24) {
+                TokenBotGlove(classic: classic, right: false).scaleEffect(3).frame(width: 87, height: 114)
+                TokenBotGlove(classic: classic, right: true).scaleEffect(3).frame(width: 87, height: 114)
+            }.padding(20).background(Color(red: 0.91, green: 0.90, blue: 0.86)).preferredColorScheme(.light)
+            renderNative(detail, to: directory.appendingPathComponent("gloves-\(classic ? "Classic" : "Flat").png"), size: CGSize(width: 238, height: 154))
+        }
         for language in [RadioLanguage.english, .simplified, .traditional] {
             for classic in [true, false] {
                 for progress in [0.0, 0.5, 1.0] {

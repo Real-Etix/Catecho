@@ -1,5 +1,9 @@
 # Catecho belly token bot
 
+## Glove refinement
+
+The user found the fingers unnatural. Replace the repeated capsule fingers with a connected curved palm, staggered knuckles, an opposed bent thumb and a cuff aligned with the antenna arm. Keep the existing 29 × 38 drawing envelope, white fabric material, mirrored grip, compact size and interactions. Verify native renders at actual size and enlarged in both appearances.
+
 ## Approved appearance correction
 
 The user subsequently chose **Original small antenna widget**. Preserve its 54 × 126-point resting footprint, chrome shaft and 42 × 26-point cream base. Remove the larger head and face. Fold small white gloves at the sides of the base; show the current token count in a tiny e-paper inset. Opening extends the base into a 216 × 78-point belly dashboard held by telescopic arms. The reserved window is 260 × 178 points. The top antenna still opens the full radio. The lower rim moves the widget. Keep the existing monitor, controls, translations and accessibility behavior.

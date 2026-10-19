@@ -1,4 +1,15 @@
-# Verification · v0.9.1
+# Verification · v0.9.2
+
+Checked on 19 October 2026. This revision changes only glove artwork, adds enlarged glove renders to the sample renderer, and increments the app version to build 22.
+
+- Release build and strict ad-hoc signature verification passed; the installed executable matches the built executable.
+- The existing 1,818-pose geometry checks and native drag, display-reposition and compact/full-radio roundtrip checks passed. No new behavior tests were added for this artwork-only revision; the full offline suite last passed in v0.9.1.
+- Reviewed Classic and Flat glove close-ups and compact/expanded native renders. Fingers form a connected tapered outline with curved separators; an opposed thumb and top cuff replace the previous stack of capsules.
+- The installed Traditional Chinese app was checked with live readings. Both glove controls still expand/retract the belly, and the widget was left compact. Saved preferences exactly match the pre-update export. The previous app bundle is retained for rollback.
+
+---
+
+## Previous verification · v0.9.1
 
 Checked on 19 October 2026 with the native macOS build.
 
