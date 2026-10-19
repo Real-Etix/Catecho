@@ -5,6 +5,10 @@ import SwiftUI
 struct LittleRadioApp {
     @MainActor static func main() {
         let app = NSApplication.shared
+        if let index = CommandLine.arguments.firstIndex(of: "--render-codex"), CommandLine.arguments.count > index + 1 {
+            renderCodex(to: URL(fileURLWithPath: CommandLine.arguments[index + 1]))
+            return
+        }
         if let index = CommandLine.arguments.firstIndex(of: "--render"), CommandLine.arguments.count > index + 1 {
             renderPreviews(to: URL(fileURLWithPath: CommandLine.arguments[index + 1]))
             return
@@ -24,6 +28,23 @@ struct LittleRadioApp {
         let delegate = DesktopController()
         app.delegate = delegate
         withExtendedLifetime(delegate) { app.run() }
+    }
+
+    @MainActor static func renderCodex(to directory: URL) {
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let preferences = UserDefaults(suiteName: "Catecho.CodexRender")!
+        let model = RadioModel(preview: true, preferences: preferences)
+        model.configuration = FeedConfiguration()
+        model.configuration.enabledChannels = ["codex"]
+        model.channel = .codex; model.isExpanded = true
+        for language in [RadioLanguage.english, .simplified, .traditional] {
+            model.language = language
+            for appearance in ["Classic", "Flat"] {
+                model.appearance = appearance
+                model.codex.window = .second
+                renderNative(RadioView(model: model, previewLabel: "PREVIEW"), to: directory.appendingPathComponent("codex-\(appearance)-\(language.rawValue).png"))
+            }
+        }
     }
 
     @MainActor static func renderPreviews(to directory: URL) {

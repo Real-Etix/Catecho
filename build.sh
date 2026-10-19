@@ -17,8 +17,8 @@ cat > "$RADIO_APP/Contents/Info.plist" <<'PLIST'
 <key>CFBundleDisplayName</key><string>Catecho</string>
 <key>CFBundleIconFile</key><string>Catecho.icns</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>0.5.0</string>
-<key>CFBundleVersion</key><string>16</string>
+<key>CFBundleShortVersionString</key><string>0.6.0</string>
+<key>CFBundleVersion</key><string>17</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>CFBundleLocalizations</key><array><string>en</string><string>zh-Hans</string><string>zh-Hant</string></array>
 <key>CFBundleDevelopmentRegion</key><string>en</string>

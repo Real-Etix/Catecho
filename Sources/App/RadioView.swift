@@ -25,7 +25,7 @@ struct RadioView: View {
         RadioTurnStage(angle: angle, backShown: model.settingsOpen, interacting: interacting, classic: model.isClassic, reduceMotion: reduceMotion) {
             front
         } back: {
-            RadioSettings(model: model, returnRequest: returnRequest, onReturnRejected: { settle(to: 180) })
+            RadioSettings(model: model, initialTab: model.channel == .codex ? 2 : 0, returnRequest: returnRequest, onReturnRejected: { settle(to: 180) })
         }
         .overlay {
             HStack(spacing: 0) {
@@ -107,8 +107,8 @@ struct RadioView: View {
             HStack(alignment: .center, spacing: 16) {
                 SpeakerGrille(classic: model.isClassic)
                 Spacer(minLength: 0)
-                RadioRoundButton(icon: "backward.end.fill", label: model.t("Previous story"), classic: model.isClassic, disabled: model.items.count < 2) { model.step(-1) }
-                RadioRoundButton(icon: "forward.end.fill", label: model.t("Next story"), classic: model.isClassic, disabled: model.items.count < 2) { model.step(1) }
+                RadioRoundButton(icon: "backward.end.fill", label: model.t(model.channel == .codex ? "Previous time view" : "Previous story"), classic: model.isClassic, disabled: model.channel != .codex && model.items.count < 2) { model.step(-1) }
+                RadioRoundButton(icon: "forward.end.fill", label: model.t(model.channel == .codex ? "Next time view" : "Next story"), classic: model.isClassic, disabled: model.channel != .codex && model.items.count < 2) { model.step(1) }
                 Spacer(minLength: 0)
                 Button { model.cycleChannel() } label: {
                     VStack(spacing: 4) {
@@ -126,6 +126,21 @@ struct RadioView: View {
     }
 
     private var screen: some View {
+        Group {
+            if model.channel == .codex {
+                CodexUsageView(monitor: model.codex, language: model.language, classic: model.isClassic, visible: model.isExpanded && !model.settingsOpen, showSettings: { model.settingsOpen = true })
+            } else { editionScreen }
+        }
+        .padding(.horizontal, 17).padding(.vertical, 12)
+        .frame(width: 314, height: 264)
+        .background {
+            RoundedRectangle(cornerRadius: 17)
+                .fill((model.isClassic ? AnyShapeStyle(LinearGradient(colors: [Color(red: 0.72, green: 0.75, blue: 0.67), .radioPaper, Color(red: 0.83, green: 0.84, blue: 0.77)], startPoint: .topLeading, endPoint: .bottomTrailing)) : AnyShapeStyle(Color.radioPaper)).shadow(.inner(color: .black.opacity(model.isClassic ? 0.25 : 0), radius: 4, x: 1, y: 3)))
+                .overlay(RoundedRectangle(cornerRadius: 17).stroke(Color.radioInk.opacity(model.isClassic ? 0.4 : 0.95), lineWidth: 1))
+        }
+    }
+
+    private var editionScreen: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text(previewLabel ?? model.t("YOUR DAILY FREQUENCY")).font(.system(size: 8, weight: .semibold, design: .monospaced)).tracking(1.5)
@@ -150,13 +165,6 @@ struct RadioView: View {
             VStack(alignment: .leading, spacing: 0) {
                 statusLine
             }.padding(.top, 7)
-        }
-        .padding(.horizontal, 17).padding(.vertical, 12)
-        .frame(width: 314, height: 264)
-        .background {
-            RoundedRectangle(cornerRadius: 17)
-                .fill((model.isClassic ? AnyShapeStyle(LinearGradient(colors: [Color(red: 0.72, green: 0.75, blue: 0.67), .radioPaper, Color(red: 0.83, green: 0.84, blue: 0.77)], startPoint: .topLeading, endPoint: .bottomTrailing)) : AnyShapeStyle(Color.radioPaper)).shadow(.inner(color: .black.opacity(model.isClassic ? 0.25 : 0), radius: 4, x: 1, y: 3)))
-                .overlay(RoundedRectangle(cornerRadius: 17).stroke(Color.radioInk.opacity(model.isClassic ? 0.4 : 0.95), lineWidth: 1))
         }
     }
 

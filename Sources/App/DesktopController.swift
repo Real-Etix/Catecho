@@ -21,7 +21,16 @@ final class DesktopController: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     override init() {
         // Native interaction testing must never change the installed radio's data.
-        if CommandLine.arguments.contains("--setup-preview") {
+        if CommandLine.arguments.contains("--codex-preview") || CommandLine.arguments.contains("--codex-live-preview") {
+            let preferences = UserDefaults(suiteName: "Catecho.CodexPreview")!
+            placementDefaults = preferences
+            let cache = FileManager.default.temporaryDirectory.appendingPathComponent("CatechoCodexPreview")
+            let monitor = CodexMonitorModel(preferences: preferences, historyDirectory: cache, simulated: !CommandLine.arguments.contains("--codex-live-preview"))
+            model = RadioModel(preview: true, preferences: preferences, cacheDirectory: cache, codexMonitor: monitor)
+            model.configuration = FeedConfiguration()
+            model.configuration.enabledChannels = ["codex"]
+            model.channel = .codex
+        } else if CommandLine.arguments.contains("--setup-preview") {
             let preferences = UserDefaults(suiteName: "Catecho.SetupPreview")!
             placementDefaults = preferences
             model = RadioModel(preferences: preferences, cacheDirectory: FileManager.default.temporaryDirectory.appendingPathComponent("CatechoSetupPreview"))

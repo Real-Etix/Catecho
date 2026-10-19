@@ -7,12 +7,13 @@ import CryptoKit
 struct RadioChannel: RawRepresentable, Hashable, Codable, CaseIterable {
  let rawValue: String
  init?(rawValue: String) { guard Self.names[rawValue] != nil || (rawValue.hasPrefix("custom:") && rawValue.dropFirst(7).range(of: "^[A-Za-z0-9][A-Za-z0-9-]{0,127}$", options: .regularExpression) != nil) else { return nil }; self.rawValue = rawValue }
+ static let codex = Self(rawValue: "codex")!
  static let ai = Self(rawValue: "ai")!, github = Self(rawValue: "github")!, research = Self(rawValue: "research")!, custom = Self(rawValue: "custom")!, games = Self(rawValue: "games")!, nba = Self(rawValue: "nba")!, education = Self(rawValue: "education")!, psychology = Self(rawValue: "psychology")!, philosophy = Self(rawValue: "philosophy")!, science = Self(rawValue: "science")!, technology = Self(rawValue: "technology")!
- private static let names = ["ai":"AI News", "github":"GitHub", "research":"Research", "custom":"Your Feed", "games":"Games", "nba":"NBA", "education":"Education", "psychology":"Psychology", "philosophy":"Philosophy", "science":"Science", "technology":"Technology"]
- static var allCases: [Self] { [.ai,.github,.research,.games,.nba,.education,.psychology,.philosophy,.science,.technology,.custom] }
+ private static let names = ["codex":"Codex", "ai":"AI News", "github":"GitHub", "research":"Research", "custom":"Your Feed", "games":"Games", "nba":"NBA", "education":"Education", "psychology":"Psychology", "philosophy":"Philosophy", "science":"Science", "technology":"Technology"]
+ static var allCases: [Self] { [.ai,.github,.research,.games,.nba,.education,.psychology,.philosophy,.science,.technology,.codex,.custom] }
  static func station(_ id: String) -> Self { Self(rawValue: "custom:" + id) ?? .custom }
  var title: String { Self.names[rawValue] ?? "Your Station" }
- var subtitle: String { self == .github ? "Recently trending open source" : self == .research ? "Fresh preprints from arXiv" : self == .nba ? "Scores and tomorrow’s matchups" : "Fresh perspectives on " + title.lowercased() }
+ var subtitle: String { self == .codex ? "Recorded token activity on this Mac" : self == .github ? "Recently trending open source" : self == .research ? "Fresh preprints from arXiv" : self == .nba ? "Scores and tomorrow’s matchups" : "Fresh perspectives on " + title.lowercased() }
  init(from decoder: Decoder) throws { let box = try decoder.singleValueContainer(); let raw = try box.decode(String.self); guard let value = Self(rawValue: raw) else { throw DecodingError.dataCorruptedError(in: box, debugDescription: "Invalid station") }; self = value }
  func encode(to encoder: Encoder) throws { var box = encoder.singleValueContainer(); try box.encode(rawValue) }
 }

@@ -16,20 +16,21 @@ final class RadioModel: ObservableObject {
     @Published var pinned: Bool { didSet { defaults.set(pinned, forKey: "pinned") } }
     @Published var quantity: Int { didSet { defaults.set(quantity, forKey: "quantity") } }
     @Published var refreshMinutes: Int { didSet { defaults.set(refreshMinutes, forKey: "refreshMinutes") } }
-    @Published var channel: RadioChannel { didSet { defaults.set(channel.rawValue, forKey: "channel") } }
-    @Published var configuration: FeedConfiguration
+    @Published var channel: RadioChannel { didSet { defaults.set(channel.rawValue, forKey: "channel"); syncCodex() } }
+    @Published var configuration: FeedConfiguration { didSet { syncCodex() } }
     @Published var batches: [RadioChannel: FeedBatch] = [:]
     @Published var failures: [RadioChannel: String] = [:]
     @Published var fetching: Set<RadioChannel> = []
     @Published var positions: [RadioChannel: Int] = [:]
-    @Published var isExpanded = false
-    @Published var settingsOpen = false
-    @Published private(set) var setupOpen = false
+    @Published var isExpanded = false { didSet { syncCodex() } }
+    @Published var settingsOpen = false { didSet { syncCodex() } }
+    @Published private(set) var setupOpen = false { didSet { syncCodex() } }
     @Published var cacheWarning: String?
     var onPlacementChange: (() -> Void)?
     var onTuck: (() -> Void)?
     var onReveal: (() -> Void)?
     var onWindowDragFinished: (() -> Void)?
+    let codex: CodexMonitorModel
     private let defaults: UserDefaults
     private let cache: RadioCache
     private let fetcher: (RadioChannel, FeedConfiguration) async throws -> FeedBatch
@@ -37,9 +38,11 @@ final class RadioModel: ObservableObject {
     private var requestIDs: [RadioChannel: UUID] = [:]
     private var lastAttempts: [RadioChannel: Date] = [:]
 
-    init(preview: Bool = false, preferences: UserDefaults? = nil, cacheDirectory: URL? = nil, fetcher: @escaping (RadioChannel, FeedConfiguration) async throws -> FeedBatch = { try await FeedService().fetch(channel: $0, configuration: $1) }) {
+    init(preview: Bool = false, preferences: UserDefaults? = nil, cacheDirectory: URL? = nil, codexMonitor: CodexMonitorModel? = nil, fetcher: @escaping (RadioChannel, FeedConfiguration) async throws -> FeedBatch = { try await FeedService().fetch(channel: $0, configuration: $1) }) {
         self.fetcher = fetcher
         defaults = preferences ?? (preview ? UserDefaults(suiteName: "LittleRadio.Preview")! : .standard)
+        let supportDirectory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!.appendingPathComponent("Little Radio/Usage")
+        codex = codexMonitor ?? CodexMonitorModel(preferences: defaults, historyDirectory: supportDirectory, simulated: preview || preferences != nil)
         language = RadioLanguage(rawValue: defaults.string(forKey: "language") ?? "system") ?? .system
         translateArticles = defaults.object(forKey: "translateArticles") == nil ? true : defaults.bool(forKey: "translateArticles")
         appearance = defaults.string(forKey: "appearance") ?? "Classic"
@@ -53,11 +56,12 @@ final class RadioModel: ObservableObject {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         cache = RadioCache(directory: cacheDirectory ?? (preview ? FileManager.default.temporaryDirectory.appendingPathComponent("LittleRadioPreview") : support.appendingPathComponent("Little Radio/Cache")))
         if !preview {
-            for c in channels { batches[c] = cache.load(channel: c, configuration: configuration) }
+            for c in feedChannels { batches[c] = cache.load(channel: c, configuration: configuration) }
         }
         let needsSetup = !preview && SetupLifecycle.shouldPresent(defaults, hasCachedEdition: !batches.isEmpty)
         if !channels.contains(channel) { channel = channels.first ?? .ai }
         setupOpen = needsSetup
+        syncCodex()
     }
 
     var hasCompletedSetup: Bool { defaults.bool(forKey: SetupLifecycle.completedKey) }
@@ -89,6 +93,10 @@ final class RadioModel: ObservableObject {
         choices += configuration.customStations.filter(\.enabled).map { RadioChannel.station($0.id) }
         return choices
     }
+    private func syncCodex() {
+        codex.configure(enabled: !setupOpen && configuration.enabledChannels.contains("codex"), visible: isExpanded && !settingsOpen && !setupOpen && channel == .codex)
+    }
+    var feedChannels: [RadioChannel] { channels.filter { $0 != .codex } }
     var items: [RadioItem] { Array((batches[channel]?.items ?? []).prefix(quantity)) }
     var currentIndex: Int { min(positions[channel] ?? 0, max(0, items.count - 1)) }
     var item: RadioItem? { items.isEmpty ? nil : items[currentIndex] }
@@ -97,11 +105,11 @@ final class RadioModel: ObservableObject {
     var statusMessage: String? { (failures[channel] ?? batches[channel]?.warning ?? cacheWarning).map(t) }
     var isStale: Bool { batches[channel].map { Date().timeIntervalSince($0.fetchedAt) > 3600 } ?? true }
     /// Most recent successful station response, not a claim that every station is up to date.
-    var lastReceivedAt: Date? { channels.compactMap { batches[$0]?.fetchedAt }.max() }
+    var lastReceivedAt: Date? { feedChannels.compactMap { batches[$0]?.fetchedAt }.max() }
     var receptionIssueCount: Int {
-        channels.filter { failures[$0] != nil || batches[$0]?.warning != nil }.count
+        feedChannels.filter { failures[$0] != nil || batches[$0]?.warning != nil }.count
     }
-    var receptionPendingCount: Int { channels.filter { batches[$0] == nil }.count }
+    var receptionPendingCount: Int { feedChannels.filter { batches[$0] == nil }.count }
     private func refreshInterval(for choice: RadioChannel) -> TimeInterval {
         TimeInterval(choice == .nba && choice == channel && isExpanded && !settingsOpen ? 60 : refreshMinutes * 60)
     }
@@ -111,7 +119,7 @@ final class RadioModel: ObservableObject {
     /// The controller checks once a minute while running; this is an approximate due time.
     func nextRefreshAt(now: Date = Date()) -> Date? {
         guard refreshMinutes > 0 else { return nil }
-        return channels.filter { !fetching.contains($0) }.map { max(now, dueAt($0, now: now)) }.min()
+        return feedChannels.filter { !fetching.contains($0) }.map { max(now, dueAt($0, now: now)) }.min()
     }
 
     func choose(_ choice: RadioChannel) {
@@ -127,25 +135,28 @@ final class RadioModel: ObservableObject {
     }
 
     func step(_ direction: Int) {
+        if channel == .codex { codex.step(direction); return }
         guard !items.isEmpty else { return }
         positions[channel] = (currentIndex + direction + items.count) % items.count
     }
     func refreshIfNeeded() {
         guard !setupOpen else { return }
+        if channel == .codex { codex.refresh(); return }
         let stale = batches[channel].map { Date().timeIntervalSince($0.fetchedAt) > 900 } ?? true
         let recentAttempt = lastAttempts[channel].map { Date().timeIntervalSince($0) < 60 } ?? false
         if stale && !recentAttempt { refresh() }
     }
     func periodicRefresh(now: Date = Date()) {
         guard !setupOpen, refreshMinutes > 0 else { return }
-        for choice in channels {
+        for choice in feedChannels {
             if dueAt(choice, now: now) <= now { refresh(choice) }
         }
     }
-    func prepareEdition() { guard !setupOpen else { return }; for choice in channels { refresh(choice) } }
+    func prepareEdition() { guard !setupOpen else { return }; for choice in feedChannels { refresh(choice) } }
     func refresh(_ target: RadioChannel? = nil) {
         guard !setupOpen else { return }
         let target = target ?? channel
+        if target == .codex { codex.refresh(); return }
         guard !fetching.contains(target) else { return }
         let config = configuration
         let requestID = UUID()
@@ -231,7 +242,7 @@ final class RadioModel: ObservableObject {
         defaults.set(next.githubQuery, forKey: "githubQuery")
         defaults.set(next.customFeedURL, forKey: "customFeedURL")
         batches.removeAll()
-        for c in channels { batches[c] = cache.load(channel: c, configuration: next) }
+        for c in feedChannels { batches[c] = cache.load(channel: c, configuration: next) }
         failures.removeAll(); positions.removeAll(); lastAttempts.removeAll()
         if !channels.contains(channel) { channel = channels.first ?? .ai }
         if refreshAfterSave { refresh() }

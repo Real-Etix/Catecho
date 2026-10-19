@@ -55,6 +55,7 @@ struct RadioSettings: View {
                 }
                 .background(RadioControlRecess(classic: model.isClassic))
                 .onAppear { if initialTab != 0 { proxy.scrollTo(initialTab, anchor: .top) } }
+                .onChange(of: model.settingsOpen) { _, open in if open && model.channel == .codex { proxy.scrollTo(2, anchor: .top) } }
             }.padding(.horizontal, 18)
             RadioBatteryCompartment(model: model, isOpen: $batteryOpen)
                 .padding(.horizontal, 20).padding(.top, 10)
@@ -232,7 +233,7 @@ struct RadioSettings: View {
         label("PUBLIC SCOREBOARD")
         note("NBA uses ESPN’s public scoreboard. Availability and update speed can vary. The saved edition remains if reception fails.")
         label("OTHER STATION SOURCES")
-        ForEach(StationCatalog.presets.filter { ![RadioChannel.ai, .github, .research, .nba].contains($0) }, id: \.rawValue) { channel in
+        ForEach(StationCatalog.presets.filter { ![RadioChannel.ai, .github, .research, .nba, .codex].contains($0) }, id: \.rawValue) { channel in
             VStack(alignment: .leading, spacing: 3) {
                 Text(model.t(channel.title)).font(.system(size: 11, weight: .medium))
                 Text(StationCatalog.sources(for: channel).map(\.title).joined(separator: " · ")).font(.system(size: 10)).opacity(0.65)
@@ -240,6 +241,8 @@ struct RadioSettings: View {
         }
     }
     @ViewBuilder private var radio: some View {
+        CodexMonitorSettings(monitor: model.codex, language: model.language, classic: model.isClassic)
+        Divider()
         RadioLoginItemControl(classic: model.isClassic, language: model.language)
         Divider()
         label("DISPLAY & RECEPTION")

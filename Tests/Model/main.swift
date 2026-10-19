@@ -185,6 +185,17 @@ struct ModelTests {
         precondition(status.lastReceivedAt == received.addingTimeInterval(30) && status.receptionIssueCount == 1)
         print("PASS reception status follows real enabled-station schedule, manual mode, failures and coalesced Refresh all")
 
+        let local = RadioModel(preview: true, fetcher: { _, _ in fatalError("Local monitor must never fetch a network feed") })
+        local.configuration = FeedConfiguration()
+        local.configuration.enabledChannels = ["codex"]
+        precondition(local.channels.map(\.rawValue) == ["codex"], "Codex must be a selectable station")
+        local.channel = local.channels[0]
+        local.prepareEdition(); local.refresh(); local.periodicRefresh(now: Date().addingTimeInterval(8000))
+        await Task.yield()
+        precondition(local.fetching.isEmpty && local.receptionPendingCount == 0)
+        precondition(local.lastReceivedAt == nil && local.nextRefreshAt() == nil && local.receptionIssueCount == 0)
+        print("PASS local Codex station never enters feed fetching or reception scheduling")
+
         var webPreferences = preferences
         webPreferences.customStations = [CustomStation(id: "web", title: "Website", feedURLs: [], webpageURLs: ["https://example.com/news"])]
         precondition(instant.saveConfiguration(webPreferences) == nil, "Webpage-only stations must be valid")

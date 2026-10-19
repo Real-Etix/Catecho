@@ -19,6 +19,7 @@ The screenshots show sample editions. The app fetches current information from t
 - Custom stations: paste website links to discover RSS/Atom feeds, with a public-webpage reader as a fallback.
 - A back panel with physical-style controls, a mouse-driven flip, and a battery compartment that shows update activity.
 - English, Simplified Chinese, and Traditional Chinese interfaces. On supported Macs, Apple's on-device Translation framework can translate article snippets while keeping an Original toggle.
+- An optional Codex station for all local sessions: recorded tokens per second, minute, or hour, with an activity chart and numeric-only local cache.
 - A first-launch tuning guide for topics, research subjects, language, and optional start at login, using the radio's own physical-style controls.
 
 Built with SwiftUI and AppKit. No third-party package dependencies, app account, paid AI API, or cloud backend. Each Mac fetches its selected sources directly. Stories are publisher headlines and excerpts, not AI-written summaries.
@@ -38,6 +39,8 @@ Current requirements:
 This is an early prototype. The downloadable build is ad-hoc signed and **not Developer ID signed or Apple-notarized**. Gatekeeper may block it on another Mac. A locally compiled build is an alternative for technical testers; a notarized distribution is planned separately. Intel and Windows builds are not included.
 
 Enable **Start at login** in setup or the radio's back settings after moving the app to Applications. Catecho reports macOS's actual status and links to Login Items if approval is needed. Updates run while the app is open and the Mac is awake. There is no automatic app updater yet; later builds are downloaded from Releases.
+
+[Codex monitoring: enable it and understand the numbers](docs/CODEX-MONITOR.md).
 
 [Read the user guide](docs/USER-GUIDE.md) for controls, sources, refresh behavior, translation, and custom stations.
 
@@ -69,9 +72,10 @@ Native diagnostics are available after building:
 dist/Catecho.app/Contents/MacOS/LittleRadio --geometry-test
 dist/Catecho.app/Contents/MacOS/LittleRadio --smoke-test
 dist/Catecho.app/Contents/MacOS/LittleRadio --setup-preview
+dist/Catecho.app/Contents/MacOS/LittleRadio --codex-preview --show
 ```
 
-The smoke test briefly creates a native radio panel. Setup preview uses a separate `Catecho.SetupPreview` preferences domain and temporary cache; it preserves its test choices across launches and disables login-item operations. Keep the installed copy closed when testing a second bundle with the same identifier. See [verification notes](docs/VERIFICATION.md) for the checks performed on this release and remaining limitations.
+The smoke test briefly creates a native radio panel. Setup preview uses a separate `Catecho.SetupPreview` preferences domain and temporary cache; it preserves its test choices across launches and disables login-item operations. Codex preview uses a separate `Catecho.CodexPreview` domain and sample activity; `--codex-live-preview --show` reads real local usage into a temporary numeric cache. Both disable login-item operations. Keep the installed copy closed when testing a second bundle with the same identifier. See [verification notes](docs/VERIFICATION.md) for the checks performed on this release and remaining limitations.
 
 ## Project layout
 

@@ -10,3 +10,5 @@ xcuserdata/
 *.p12
 *.p8
 *.mobileprovision
+
+.superpowers/

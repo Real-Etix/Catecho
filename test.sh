@@ -3,7 +3,7 @@ set -euo pipefail
 source "$(cd "$(dirname "$0")" && pwd)/toolchain.sh"
 swiftc "${RADIO_FLAGS[@]}" -parse-as-library "$RADIO_SOURCE_DIR"/Sources/Core/*.swift "$RADIO_SOURCE_DIR/Tests/main.swift" -o "$RADIO_BUILD_DIR/core-tests"
 "$RADIO_BUILD_DIR/core-tests" "$@"
-swiftc "${RADIO_FLAGS[@]}" -parse-as-library "$RADIO_SOURCE_DIR"/Sources/Core/*.swift "$RADIO_SOURCE_DIR/Sources/App/RadioModel.swift" "$RADIO_SOURCE_DIR/Tests/Model/main.swift" -o "$RADIO_BUILD_DIR/model-tests" -framework AppKit -framework SwiftUI
+swiftc "${RADIO_FLAGS[@]}" -parse-as-library "$RADIO_SOURCE_DIR"/Sources/Core/*.swift "$RADIO_SOURCE_DIR/Sources/App/RadioModel.swift" "$RADIO_SOURCE_DIR/Sources/App/CodexMonitorModel.swift" "$RADIO_SOURCE_DIR/Tests/Model/main.swift" -o "$RADIO_BUILD_DIR/model-tests" -framework AppKit -framework SwiftUI
 "$RADIO_BUILD_DIR/model-tests"
 swiftc "${RADIO_FLAGS[@]}" -parse-as-library "$RADIO_SOURCE_DIR/Sources/Core/AntennaPull.swift" "$RADIO_SOURCE_DIR/Sources/Core/RadioTurn.swift" "$RADIO_SOURCE_DIR/Sources/Core/RadioCaseGeometry.swift" "$RADIO_SOURCE_DIR/Tests/Interaction/main.swift" -o "$RADIO_BUILD_DIR/interaction-tests"
 "$RADIO_BUILD_DIR/interaction-tests"
@@ -22,7 +22,15 @@ swiftc "${RADIO_FLAGS[@]}" -parse-as-library "$RADIO_SOURCE_DIR"/Sources/Core/*.
 "$RADIO_BUILD_DIR/webpage-tests" "$@"
 
 # First-run lifecycle, persisted setup and the operating-system login adapter.
-swiftc "${RADIO_FLAGS[@]}" -parse-as-library "$RADIO_SOURCE_DIR"/Sources/Core/*.swift "$RADIO_SOURCE_DIR/Sources/App/RadioModel.swift" "$RADIO_SOURCE_DIR/Tests/Setup/main.swift" -o "$RADIO_BUILD_DIR/setup-tests" -framework AppKit -framework SwiftUI
+swiftc "${RADIO_FLAGS[@]}" -parse-as-library "$RADIO_SOURCE_DIR"/Sources/Core/*.swift "$RADIO_SOURCE_DIR/Sources/App/RadioModel.swift" "$RADIO_SOURCE_DIR/Sources/App/CodexMonitorModel.swift" "$RADIO_SOURCE_DIR/Tests/Setup/main.swift" -o "$RADIO_BUILD_DIR/setup-tests" -framework AppKit -framework SwiftUI
 "$RADIO_BUILD_DIR/setup-tests"
 swiftc "${RADIO_FLAGS[@]}" -parse-as-library "$RADIO_SOURCE_DIR/Sources/App/RadioLoginItem.swift" "$RADIO_SOURCE_DIR/Tests/Login/main.swift" -o "$RADIO_BUILD_DIR/login-tests" -framework ServiceManagement
 "$RADIO_BUILD_DIR/login-tests"
+
+# Local Codex accounting and rolling display windows.
+swiftc "${RADIO_FLAGS[@]}" -parse-as-library "$RADIO_SOURCE_DIR"/Sources/Core/CodexUsage*.swift "$RADIO_SOURCE_DIR/Tests/CodexUsage/main.swift" -o "$RADIO_BUILD_DIR/codex-usage-tests"
+"$RADIO_BUILD_DIR/codex-usage-tests"
+swiftc "${RADIO_FLAGS[@]}" -parse-as-library "$RADIO_SOURCE_DIR/Sources/Core/CodexUsage.swift" "$RADIO_SOURCE_DIR/Sources/Core/CodexUsageWindow.swift" "$RADIO_SOURCE_DIR/Tests/CodexWindow/main.swift" -o "$RADIO_BUILD_DIR/codex-window-tests"
+"$RADIO_BUILD_DIR/codex-window-tests"
+swiftc "${RADIO_FLAGS[@]}" -parse-as-library "$RADIO_SOURCE_DIR"/Sources/Core/*.swift "$RADIO_SOURCE_DIR/Sources/App/RadioModel.swift" "$RADIO_SOURCE_DIR/Sources/App/CodexMonitorModel.swift" "$RADIO_SOURCE_DIR/Tests/CodexMonitor/main.swift" -o "$RADIO_BUILD_DIR/codex-monitor-tests" -framework AppKit -framework SwiftUI
+"$RADIO_BUILD_DIR/codex-monitor-tests"

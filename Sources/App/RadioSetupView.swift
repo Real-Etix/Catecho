@@ -186,7 +186,7 @@ struct RadioSetupView: View {
 struct RadioLoginItemControl: View {
     let classic: Bool
     let language: RadioLanguage
-    @StateObject private var login = CommandLine.arguments.contains("--setup-preview")
+    @StateObject private var login = CommandLine.arguments.contains(where: { ["--setup-preview", "--codex-preview", "--codex-live-preview"].contains($0) })
         ? RadioLoginItem(readStatus: { .notFound }, register: {}, unregister: {}, openSettings: {})
         : RadioLoginItem()
     private func t(_ text: String) -> String { language.text(text) }
