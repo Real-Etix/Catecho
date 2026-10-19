@@ -145,6 +145,18 @@ func check(_ condition: @autoclosure () -> Bool, _ message: String) {
         check(s.events.count == 20_000 && s.warning != nil, "numeric history is bounded with an explicit partial-history warning")
         let cachedData = try! Data(contentsOf: cap.appendingPathComponent("numeric.json"))
         check(cachedData.count <= 8 * 1024 * 1024 && !String(decoding: cachedData, as: UTF8.self).contains("payload"), "atomic cache is bounded numeric data without rollout bodies")
+        let limitedRestore = CodexUsageCollector(rootDirectory: cap.appendingPathComponent("absent"), historyURL: cap.appendingPathComponent("numeric.json"))
+        s = await limitedRestore.poll(now: now)
+        check(s.events.count == 20_000 && s.warning != nil, "cache limit provenance survives restart when source logs are unavailable")
+        var corrupt = try! JSONSerialization.jsonObject(with: validHistory) as! [String: Any]
+        var corruptEvents = corrupt["events"] as! [[String: Any]]
+        var corruptUsage = corruptEvents[0]["usage"] as! [String: Any]
+        corruptUsage["cachedInput"] = -1; corruptUsage["reasoning"] = 1000
+        corruptEvents[0]["usage"] = corruptUsage; corrupt["events"] = corruptEvents
+        let corruptURL = root.appendingPathComponent("invalid-subsets.json")
+        try! JSONSerialization.data(withJSONObject: corrupt).write(to: corruptURL)
+        s = await CodexUsageCollector(rootDirectory: sourceUnavailable, historyURL: corruptURL).poll(now: now)
+        check(s.events.count == 4 && s.warning != nil, "invalid cached token subsets are rejected with partial-history warning")
         print("PASS all Codex usage collector tests")
     }
 }

@@ -15,6 +15,7 @@ actor CodexUsageCollector {
     private var warnings: Set<String> = []
     private var didLoadHistory = false
     private var historyDirty = false
+    private var historyWasLimited = false
     private let decoder = JSONDecoder()
     private let fractionalDate = ISO8601DateFormatter()
     private let wholeDate = ISO8601DateFormatter()
@@ -62,7 +63,7 @@ actor CodexUsageCollector {
         enum Key: String, CodingKey { case subagent }
     }
     private struct Row: Decodable { var type: String; var timestamp: String?; var payload: Payload? }
-    private struct History: Codable { var version: Int; var events: [CodexUsageEvent] }
+    private struct History: Codable { var version: Int; var events: [CodexUsageEvent]; var wasLimited: Bool? = nil }
 
     init(rootDirectory: URL, historyURL: URL? = nil) {
         root = rootDirectory
@@ -71,10 +72,11 @@ actor CodexUsageCollector {
     }
 
     func poll(now: Date = Date()) async -> CodexUsageSnapshot {
-        loadHistory()
+        loadHistory(now: now)
         let retained = events.filter { $0.value.recordedAt >= now.addingTimeInterval(-86400) && $0.value.recordedAt <= now }
         if retained.count != events.count { historyDirty = true }
         events = retained
+        if events.isEmpty { historyWasLimited = false }
         var bytesRead = 0
         var issue: CodexUsageIssue?
         let fm = FileManager.default
@@ -252,17 +254,29 @@ actor CodexUsageCollector {
     private func boundHistory() {
         guard events.count > Self.historyLimit else { return }
         historyDirty = true
+        historyWasLimited = true
         events = Dictionary(uniqueKeysWithValues: events.values.sorted { $0.recordedAt > $1.recordedAt }.prefix(Self.historyLimit).map { ($0.id, $0) })
         warnings.insert("Recorded usage exceeded the local history limit; history is partial.")
     }
-    private func loadHistory() {
+    private func loadHistory(now: Date) {
         guard !didLoadHistory else { return }; didLoadHistory = true
         guard let url = historyURL, FileManager.default.fileExists(atPath: url.path) else { return }
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path), (attrs[.size] as? NSNumber)?.intValue ?? Int.max <= 8 * 1024 * 1024,
               let data = try? Data(contentsOf: url), let history = try? decoder.decode(History.self, from: data), history.version == 1 else {
             warnings.insert("The numeric usage cache could not be restored; history is being rebuilt."); return
         }
-        for event in history.events.prefix(Self.historyLimit) where event.id.utf8.count <= 1024 && event.sessionID.utf8.count <= 256 && event.usage.input >= 0 && event.usage.output >= 0 && event.usage.input <= Int64.max / 4 && event.usage.output <= Int64.max / 4 {
+        historyWasLimited = history.wasLimited == true || history.events.count > Self.historyLimit
+        if historyWasLimited && history.events.contains(where: { $0.recordedAt >= now.addingTimeInterval(-86400) && $0.recordedAt <= now }) {
+            warnings.insert("The restored numeric history was limited; history is partial.")
+        }
+        for event in history.events.prefix(Self.historyLimit) {
+            guard event.id.utf8.count <= 1024, event.sessionID.utf8.count <= 256,
+                  event.usage.input >= 0, event.usage.output >= 0,
+                  event.usage.input <= Int64.max / 4, event.usage.output <= Int64.max / 4,
+                  event.usage.cachedInput >= 0, event.usage.cachedInput <= event.usage.input,
+                  event.usage.reasoning >= 0, event.usage.reasoning <= event.usage.output else {
+                warnings.insert("Invalid numeric cache records were skipped; history is partial."); continue
+            }
             events[event.id] = event
             if event.id.hasPrefix("response:") { modernSessions.insert(event.sessionID) }
             if event.id.hasPrefix("legacy:") { legacySessions.insert(event.sessionID) }
@@ -272,10 +286,11 @@ actor CodexUsageCollector {
         guard historyDirty, let url = historyURL else { return }
         do {
             var ordered = events.values.sorted { $0.recordedAt < $1.recordedAt }
-            var data = try JSONEncoder().encode(History(version: 1, events: ordered))
+            var data = try JSONEncoder().encode(History(version: 1, events: ordered, wasLimited: historyWasLimited))
             while data.count > 8 * 1024 * 1024 && !ordered.isEmpty {
                 ordered = Array(ordered.suffix(ordered.count * 3 / 4))
-                data = try JSONEncoder().encode(History(version: 1, events: ordered))
+                historyWasLimited = true
+                data = try JSONEncoder().encode(History(version: 1, events: ordered, wasLimited: historyWasLimited))
                 warnings.insert("Recorded usage exceeded the local cache size limit; history is partial.")
                 events = Dictionary(uniqueKeysWithValues: ordered.map { ($0.id, $0) })
             }
