@@ -1,4 +1,20 @@
-# Verification · v0.9.6
+# Verification · v0.10.0
+
+Checked on 20 October 2026 with the native macOS build (27).
+
+- The missing-station regression failed before implementation. The full offline suite completed with 318 PASS records. After review fixes, the focused markets/model suites completed again with 26 PASS records, including equal-timestamp backfill suppression. Checks cover legacy preferences, ticker validation, source timestamps, missing/invalid prices, ordered partial responses, cache isolation and fallback, all-watchlist pagination, quiet alert baselines, duplicate/restart/backfill behavior, and Manual scheduling.
+- Live requests through the real Swift fetching path received USD quotes for all 12 configured test-watchlist symbols and finance headlines from both feeds. The installed app subsequently cached 42 stock items (12 quotes plus 30 headlines), 30 finance items and 17 original-X reset announcements, with no warnings for these stations. Community-observed events without an X post are intentionally excluded.
+- Generated 30 native market/alert/settings previews spanning Classic and Flat in English, Simplified Chinese and Traditional Chinese. Inspected populated, cached and unavailable quotes, source attribution, labels and the themed ticker field. The live Traditional Chinese app displayed the finance station, the corrected ticker, and the twelfth quote at page 12 of 20 (12 quotes plus eight selected headlines).
+- Independent read-only review found two edge cases, both fixed and rechecked: equal-timestamp late entries cannot alert, and notification permission status refreshes when the nonactivating radio panel regains key status. The follow-up review reported no further findings.
+- macOS initially denied notifications. Enabled Catecho's notification switch through System Settings, then verified both the radio's permission label and the native `--notification-status` diagnostic report authorization. The first scan established a quiet baseline. No new announcement banner was forced during testing; deduplication and eligibility are covered by deterministic tests.
+- Final native smoke checks passed for compact dragging/click jitter, the complete base hit area, reserved-frame reposition/retraction, and tuck/reveal roundtrips. Strict ad-hoc signature verification and installed/built executable comparison passed.
+- Updated the installed app with a rollback copy. Existing saved preferences, including the previous station, language, theme, login choice, Codex selection and placement, were preserved. Only the requested station configuration and new alert ledger changed. The personal watchlist is stored only in local preferences. Catecho was left tucked, with hands and token display hidden.
+
+Quotes use an unofficial public Yahoo Finance endpoint and can be delayed or unavailable. Reset data comes from the attributed community service [Codex Resets](https://codex-resets.com/api/docs), not from an account-quota API. No paid backend, account or embedded key was added.
+
+---
+
+# Previous verification · v0.9.6
 
 Checked on 20 October 2026. The compact bot’s full cream base now supports dragging, with a 54 × 32-point target instead of the 34 × 8-point bottom strip. Clicks still expand the dashboard; movement below four points is tolerated as click jitter.
 

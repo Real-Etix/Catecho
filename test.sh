@@ -12,6 +12,8 @@ if [ "${1:-}" = "--codex-zstd" ]; then
 fi
 swiftc "${RADIO_FLAGS[@]}" "${RADIO_LINK_FLAGS[@]}" -parse-as-library "$RADIO_SOURCE_DIR"/Sources/Core/*.swift "$RADIO_SOURCE_DIR/Tests/main.swift" -o "$RADIO_BUILD_DIR/core-tests"
 "$RADIO_BUILD_DIR/core-tests" "$@"
+swiftc "${RADIO_FLAGS[@]}" "${RADIO_LINK_FLAGS[@]}" -parse-as-library "$RADIO_SOURCE_DIR"/Sources/Core/*.swift "$RADIO_SOURCE_DIR/Tests/Markets/main.swift" -o "$RADIO_BUILD_DIR/markets-tests"
+"$RADIO_BUILD_DIR/markets-tests"
 swiftc "${RADIO_FLAGS[@]}" "${RADIO_LINK_FLAGS[@]}" -parse-as-library "$RADIO_SOURCE_DIR"/Sources/Core/*.swift "$RADIO_SOURCE_DIR/Sources/App/RadioModel.swift" "$RADIO_SOURCE_DIR/Sources/App/CodexMonitorModel.swift" "$RADIO_SOURCE_DIR/Tests/Model/main.swift" -o "$RADIO_BUILD_DIR/model-tests" -framework AppKit -framework SwiftUI
 "$RADIO_BUILD_DIR/model-tests"
 swiftc "${RADIO_FLAGS[@]}" "${RADIO_LINK_FLAGS[@]}" -parse-as-library "$RADIO_SOURCE_DIR/Sources/Core/AntennaPull.swift" "$RADIO_SOURCE_DIR/Sources/Core/RadioTurn.swift" "$RADIO_SOURCE_DIR/Sources/Core/RadioCaseGeometry.swift" "$RADIO_SOURCE_DIR/Tests/Interaction/main.swift" -o "$RADIO_BUILD_DIR/interaction-tests"

@@ -118,7 +118,7 @@ struct RadioServiceButtonStyle: ButtonStyle {
 struct RadioFieldStyle: TextFieldStyle {
     let classic: Bool
     func _body(configuration: TextField<Self._Label>) -> some View {
-        configuration.padding(6).background(Color.radioCream, in: RoundedRectangle(cornerRadius: 4))
+        configuration.textFieldStyle(.plain).padding(6).background(Color.radioCream, in: RoundedRectangle(cornerRadius: 4))
             .overlay(RoundedRectangle(cornerRadius: 4).stroke(RadioPlastic.edge.opacity(0.6), lineWidth: 0.6))
     }
 }

@@ -18,6 +18,7 @@ struct RadioSettings: View {
     private let returnRequest: Int
     private let onReturnRejected: () -> Void
     @State private var draft = FeedConfiguration()
+    @State private var stockInput = ""
     @State private var validation: String?
     @State private var editingID: String?
     @State private var customName = ""
@@ -35,9 +36,10 @@ struct RadioSettings: View {
         self.onReturnRejected = onReturnRejected
         _batteryOpen = State(initialValue: initialBatteryOpen)
         _draft = State(initialValue: model.configuration)
+        _stockInput = State(initialValue: model.configuration.stockSymbols.joined(separator: ", "))
     }
 
-    private var dirty: Bool { draft != model.configuration || editorOpen }
+    private var dirty: Bool { draft != model.configuration || stockInput != model.configuration.stockSymbols.joined(separator: ", ") || editorOpen }
     private var hasEditorText: Bool { !customName.isEmpty || !customFeeds.isEmpty || !customKeywords.isEmpty }
 
     var body: some View {
@@ -47,6 +49,8 @@ struct RadioSettings: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
                         stations.id(0)
+                        Divider().padding(.vertical, 6)
+                        markets.id(3)
                         Divider().padding(.vertical, 6)
                         sources.id(1)
                         Divider().padding(.vertical, 6)
@@ -71,12 +75,13 @@ struct RadioSettings: View {
         .environment(\.colorScheme, .light)
         .tint(Workshop.brass)
         .buttonStyle(RadioServiceButtonStyle(classic: model.isClassic))
-        .onAppear { draft = model.configuration }
+        .onAppear { draft = model.configuration; stockInput = draft.stockSymbols.joined(separator: ", ") }
         .onChange(of: returnRequest) { _, _ in
             if !save(close: true) { onReturnRejected() }
         }
         .onChange(of: model.settingsOpen) { _, open in
             draft = model.configuration; validation = nil; resetEditor()
+            stockInput = draft.stockSymbols.joined(separator: ", ")
             if !open { NSApp.keyWindow?.makeFirstResponder(nil) }
         }
     }
@@ -240,6 +245,26 @@ struct RadioSettings: View {
             }
         }
     }
+    @ViewBuilder private var markets: some View {
+        label("US STOCK WATCHLIST")
+        TextField("AAPL, MSFT", text: $stockInput)
+            .textFieldStyle(RadioFieldStyle(classic: model.isClassic)).font(.system(size: 11, design: .monospaced))
+            .accessibilityLabel(model.t("US stock tickers"))
+        note("Up to 20 US tickers, separated by commas. Every quote stays on the dial, followed by your chosen number of headlines.")
+        note("Yahoo Finance regular-session prices may be delayed. Each quote shows its source timestamp.")
+        Divider()
+        label("TIBO RESET ALERTS")
+        Toggle(model.t("Alert for new reset announcements"), isOn: $draft.resetAlerts)
+            .toggleStyle(RadioSlideSwitchStyle(classic: model.isClassic)).font(.system(size: 11))
+        note("Enable Tibo Resets on your dial. New announcements are checked about every five minutes while Catecho is running. The first check is quiet.")
+        note("Community tracker of @thsottiaux on X. An announcement does not confirm a reset on your account.")
+        Link("Codex Resets", destination: ResetAnnouncements.attribution).font(.system(size: 10))
+        if model.resetAlertsActive {
+            note(model.resetNotificationStatus)
+            Button(model.t("Notification settings")) { model.onNotificationSettings?() }
+                .controlSize(.small)
+        }
+    }
     @ViewBuilder private var radio: some View {
         CodexMonitorSettings(monitor: model.codex, language: model.language, classic: model.isClassic)
         Divider()
@@ -251,7 +276,7 @@ struct RadioSettings: View {
         Toggle(model.t("Keep open while I work"), isOn: $model.pinned).toggleStyle(RadioSlideSwitchStyle(classic: model.isClassic)).font(.system(size: 11))
         RadioDetentPicker(title: model.t("Stories per channel"), selection: $model.quantity, options: [3, 5, 8].map { ($0, String($0)) }, classic: model.isClassic)
         RadioDetentPicker(title: model.t("Refresh interval"), selection: $model.refreshMinutes, options: [(0, model.t("Manual")), (15, model.t("15 min")), (60, model.t("Hourly"))], classic: model.isClassic)
-        note("Automatic NBA updates run about once a minute while its station is open. Other stations use your chosen interval.")
+        note("NBA checks every minute while open. Stocks check every five minutes while open; enabled reset alerts check every five minutes. Manual pauses all periodic checks.")
         Divider()
         label("LANGUAGE")
         RadioDetentPicker(title: model.t("Language"), selection: $model.language, options: RadioLanguage.allCases.map { ($0, $0 == .system ? model.t("System default") : $0.nativeName) }, classic: model.isClassic)
@@ -283,9 +308,12 @@ struct RadioSettings: View {
     }
     @discardableResult private func save(close: Bool) -> Bool {
         if editorOpen && hasEditorText { storeEditor(); if editorOpen { return false } }
+        do { draft.stockSymbols = try StockSymbols.parse(stockInput) }
+        catch { validation = error.localizedDescription; return false }
         validation = model.saveConfiguration(draft)
         if validation == nil {
             draft = model.configuration
+            stockInput = draft.stockSymbols.joined(separator: ", ")
             validation = "Settings saved."
             if close { model.settingsOpen = false }
             return true

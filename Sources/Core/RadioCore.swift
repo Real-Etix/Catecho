@@ -8,12 +8,13 @@ struct RadioChannel: RawRepresentable, Hashable, Codable, CaseIterable {
  let rawValue: String
  init?(rawValue: String) { guard Self.names[rawValue] != nil || (rawValue.hasPrefix("custom:") && rawValue.dropFirst(7).range(of: "^[A-Za-z0-9][A-Za-z0-9-]{0,127}$", options: .regularExpression) != nil) else { return nil }; self.rawValue = rawValue }
  static let codex = Self(rawValue: "codex")!
+ static let finance = Self(rawValue: "finance")!, stocks = Self(rawValue: "stocks")!, resets = Self(rawValue: "resets")!
  static let ai = Self(rawValue: "ai")!, github = Self(rawValue: "github")!, research = Self(rawValue: "research")!, custom = Self(rawValue: "custom")!, games = Self(rawValue: "games")!, nba = Self(rawValue: "nba")!, education = Self(rawValue: "education")!, psychology = Self(rawValue: "psychology")!, philosophy = Self(rawValue: "philosophy")!, science = Self(rawValue: "science")!, technology = Self(rawValue: "technology")!
- private static let names = ["codex":"Codex", "ai":"AI News", "github":"GitHub", "research":"Research", "custom":"Your Feed", "games":"Games", "nba":"NBA", "education":"Education", "psychology":"Psychology", "philosophy":"Philosophy", "science":"Science", "technology":"Technology"]
- static var allCases: [Self] { [.ai,.github,.research,.games,.nba,.education,.psychology,.philosophy,.science,.technology,.codex,.custom] }
+ private static let names = ["codex":"Codex", "ai":"AI News", "github":"GitHub", "research":"Research", "custom":"Your Feed", "games":"Games", "nba":"NBA", "education":"Education", "psychology":"Psychology", "philosophy":"Philosophy", "science":"Science", "technology":"Technology", "finance":"Financial News", "stocks":"US Stocks", "resets":"Tibo Resets"]
+ static var allCases: [Self] { [.ai,.github,.research,.games,.nba,.finance,.stocks,.education,.psychology,.philosophy,.science,.technology,.codex,.resets,.custom] }
  static func station(_ id: String) -> Self { Self(rawValue: "custom:" + id) ?? .custom }
  var title: String { Self.names[rawValue] ?? "Your Station" }
- var subtitle: String { self == .codex ? "Recorded token activity on this Mac" : self == .github ? "Recently trending open source" : self == .research ? "Fresh preprints from arXiv" : self == .nba ? "Scores and tomorrow’s matchups" : "Fresh perspectives on " + title.lowercased() }
+ var subtitle: String { self == .finance ? "Markets, business and monetary policy" : self == .stocks ? "Your watchlist and market headlines" : self == .resets ? "Public reset announcements from Tibo" : self == .codex ? "Recorded token activity on this Mac" : self == .github ? "Recently trending open source" : self == .research ? "Fresh preprints from arXiv" : self == .nba ? "Scores and tomorrow’s matchups" : "Fresh perspectives on " + title.lowercased() }
  init(from decoder: Decoder) throws { let box = try decoder.singleValueContainer(); let raw = try box.decode(String.self); guard let value = Self(rawValue: raw) else { throw DecodingError.dataCorruptedError(in: box, debugDescription: "Invalid station") }; self = value }
  func encode(to encoder: Encoder) throws { var box = encoder.singleValueContainer(); try box.encode(rawValue) }
 }
@@ -33,6 +34,7 @@ struct CustomStation: Identifiable, Codable, Equatable {
 }
 struct RadioItem: Identifiable, Codable, Equatable {
  let id: String; let title: String; let excerpt: String; let source: String; let url: URL; let publishedAt: Date?; let metric: String?
+ var stockQuote: StockQuote? = nil
 }
 struct FeedConfiguration: Codable, Equatable {
  var githubQuery: String; var customFeedURL: String
@@ -41,8 +43,10 @@ struct FeedConfiguration: Codable, Equatable {
  var researchTopics = ["cs.AI","physics"]
  var enabledChannels = ["ai","github","research"]
  var customStations: [CustomStation] = []
+ var stockSymbols: [String] = []
+ var resetAlerts = false
  init(githubQuery: String = "stars:>10000", customFeedURL: String = "") { self.githubQuery=githubQuery; self.customFeedURL=customFeedURL }
- enum CodingKeys: String, CodingKey { case githubQuery,customFeedURL,githubPeriod,aiSourceIDs,researchTopics,enabledChannels,customStations }
+ enum CodingKeys: String, CodingKey { case githubQuery,customFeedURL,githubPeriod,aiSourceIDs,researchTopics,enabledChannels,customStations,stockSymbols,resetAlerts }
  init(from decoder: Decoder) throws { self.init(); let c = try decoder.container(keyedBy: CodingKeys.self)
  githubQuery = try c.decodeIfPresent(String.self, forKey: .githubQuery) ?? githubQuery
  customFeedURL = try c.decodeIfPresent(String.self, forKey: .customFeedURL) ?? customFeedURL
@@ -50,7 +54,9 @@ struct FeedConfiguration: Codable, Equatable {
  aiSourceIDs = try c.decodeIfPresent([String].self, forKey: .aiSourceIDs) ?? aiSourceIDs
  researchTopics = try c.decodeIfPresent([String].self, forKey: .researchTopics) ?? researchTopics
  enabledChannels = try c.decodeIfPresent([String].self, forKey: .enabledChannels) ?? enabledChannels
- customStations = try c.decodeIfPresent([CustomStation].self, forKey: .customStations) ?? customStations }
+ customStations = try c.decodeIfPresent([CustomStation].self, forKey: .customStations) ?? customStations
+ stockSymbols = try c.decodeIfPresent([String].self, forKey: .stockSymbols) ?? stockSymbols
+ resetAlerts = try c.decodeIfPresent(Bool.self, forKey: .resetAlerts) ?? resetAlerts }
 }
 struct FeedBatch: Codable { let items: [RadioItem]; let fetchedAt: Date; let warning: String? }
 struct RadioCache {
@@ -61,6 +67,7 @@ struct RadioCache {
  switch channel { case .github: scope += configuration.githubPeriod.rawValue
  case .ai: scope += configuration.aiSourceIDs.sorted().joined(separator: ",")
  case .research: scope += configuration.researchTopics.sorted().joined(separator: ",")
+ case .stocks: scope += configuration.stockSymbols.joined(separator: ",")
  case .custom: scope += configuration.customFeedURL.trimmingCharacters(in: .whitespacesAndNewlines)
  default: if let station = configuration.customStations.first(where: { "custom:" + $0.id == channel.rawValue }) { scope += station.feedURLs.sorted().joined(separator: "|") + ":" + station.keywords.lowercased(); if !station.webpageURLs.isEmpty { scope += ":webpages:" + station.webpageURLs.sorted().joined(separator: "|") } } }
  let hash = SHA256.hash(data: Data(scope.utf8)).map { String(format: "%02x", $0) }.joined()
@@ -164,6 +171,11 @@ struct FeedService {
  try Task.checkCancellation()
  if channel == .github { return try await github(configuration.githubPeriod) }
  if channel == .nba { return try await nba() }
+ if channel == .stocks { return try await stocks(configuration) }
+ if channel == .resets { return try ResetAnnouncements.parse(await download(ResetAnnouncements.endpoint)) }
+ return try await news(channel: channel, configuration: configuration)
+ }
+ func news(channel: RadioChannel, configuration: FeedConfiguration) async throws -> FeedBatch {
  var sources: [StationSource] = []; var keywords: [String] = []
  if channel == .ai {
  guard configuration.aiSourceIDs.allSatisfy({ id in StationCatalog.aiSources.contains { $0.id == id } }) else { throw FeedError.message("Choose valid AI sources.") }
@@ -218,7 +230,7 @@ struct FeedService {
  try Task.checkCancellation()
  return FeedBatch(items: items, fetchedAt: Date(), warning: failures.isEmpty ? nil : failures.joined(separator: "\n"))
  }
- private func download(_ url: URL) async throws -> Data {
+ func download(_ url: URL) async throws -> Data {
  try Task.checkCancellation()
  if let downloader {
  let data = try await downloader(url)

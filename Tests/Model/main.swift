@@ -209,5 +209,46 @@ struct ModelTests {
         precondition(instant.saveConfiguration(invalidWeb) != nil)
         print("PASS webpage-only settings persist; unsafe and oversized source lists rejected")
 
+        let marketFeed = ControlledFeed()
+        let markets = RadioModel(preview: true, fetcher: marketFeed.fetch)
+        markets.configuration = FeedConfiguration(); markets.configuration.enabledChannels = ["stocks", "resets"]
+        markets.channel = .stocks; markets.quantity = 3; markets.refreshMinutes = 60; markets.isExpanded = true
+        let quotes = (0..<12).map { StockQuote(symbol: "A\($0)", name: "Fixture", price: 100, changePercent: nil, asOf: received).item }
+        markets.batches[.stocks] = FeedBatch(items: quotes + stories, fetchedAt: Date(), warning: nil)
+        precondition(markets.items.count == 15)
+        markets.positions[.stocks] = 11
+        markets.refresh()
+        await wait { marketFeed.pending.count == 1 }
+        marketFeed.pending[0].resume(returning: FeedBatch(items: Array(quotes.dropLast()) + [StockQuote.unavailable("A11").item] + stories, fetchedAt: Date(), warning: "Quote unavailable: A11"))
+        await wait { !markets.isFetching }
+        precondition(markets.currentIndex == 11 && markets.item?.stockQuote?.isCached == true && markets.item?.stockQuote?.asOf == received)
+        precondition(markets.items.count == 15)
+        print("PASS every watchlist quote stays reachable; selected late quote and cached timestamp survive partial refresh")
+        markets.configuration.resetAlerts = true
+        markets.batches[.resets] = FeedBatch(items: [], fetchedAt: received, warning: nil)
+        markets.batches[.stocks] = FeedBatch(items: quotes, fetchedAt: received, warning: nil)
+        precondition(markets.nextRefreshAt(now: received) == received.addingTimeInterval(300))
+        markets.refreshMinutes = 0
+        precondition(markets.nextRefreshAt(now: received) == nil)
+        print("PASS reset alerts check in background and Manual pauses scheduled work")
+        markets.channel = .resets
+        var alerts: [String] = []
+        markets.onResetAnnouncement = { alerts.append($0.id) }
+        let resetOld = RadioItem(id: "reset:100", title: "Codex reset announced", excerpt: "Fixture", source: "Fixture", url: URL(string: "https://x.com/thsottiaux/status/100")!, publishedAt: Date().addingTimeInterval(-3600), metric: "RESET ANNOUNCEMENT")
+        let resetNew = RadioItem(id: "reset:101", title: "Codex reset announced", excerpt: "Fixture", source: "Fixture", url: URL(string: "https://x.com/thsottiaux/status/101")!, publishedAt: Date().addingTimeInterval(-5), metric: "RESET ANNOUNCEMENT")
+        for entries in [[resetOld], [resetNew, resetOld], [resetNew, resetOld]] {
+            markets.refresh(); await wait { marketFeed.pending.count > 1 }
+            marketFeed.pending.removeLast().resume(returning: FeedBatch(items: entries, fetchedAt: Date(), warning: nil))
+            await wait { !markets.isFetching }
+        }
+        precondition(alerts == ["reset:101"])
+        markets.configuration.resetAlerts = false
+        markets.refresh(); await wait { marketFeed.pending.count > 1 }
+        marketFeed.pending.removeLast().resume(returning: FeedBatch(items: [resetNew], fetchedAt: Date(), warning: nil))
+        await wait { !markets.isFetching }
+        precondition(alerts == ["reset:101"])
+        print("PASS model emits one alert after quiet baseline and none when disabled")
+
+
     }
 }

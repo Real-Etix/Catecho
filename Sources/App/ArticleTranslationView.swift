@@ -47,6 +47,10 @@ struct RadioStoryContent: View {
                         .help(model.t(actionHelp ?? actionTitle))
                 }
             }.font(.system(size: 10, weight: .medium)).padding(.top, 1)
+            if model.channel == .resets {
+                Link(model.t("Data: Codex Resets · community tracker"), destination: ResetAnnouncements.attribution)
+                    .font(.system(size: 9)).buttonStyle(.plain).opacity(0.75)
+            }
         }.padding(.top, 10)
     }
 }

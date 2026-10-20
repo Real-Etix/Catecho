@@ -15,6 +15,7 @@ final class DesktopController: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var clickMonitor: Any?
     private var localMonitor: Any?
     private var timer: Timer?
+    private var resetNotifications: ResetNotifications?
     private var botRetraction: Task<Void, Never>?
     private var botDragging = false
     private var botShrinkPending = false
@@ -73,6 +74,22 @@ final class DesktopController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         model.onPlacementChange = { [weak self] in self?.resetPlacement() }
         model.onLanguageChange = { [weak self] in self?.updateMenu() }
+        if !smokeTesting && !CommandLine.arguments.contains(where: { $0.hasSuffix("-preview") }) {
+            let notifications = ResetNotifications()
+            resetNotifications = notifications
+            notifications.status = { [weak self] in self?.model.resetNotificationStatus = $0 }
+            notifications.openStation = { [weak self] in
+                guard let self else { return }
+                self.model.choose(.resets); self.reveal()
+            }
+            model.onResetAlertsChange = { [weak notifications] in notifications?.configure($0) }
+            model.onResetAnnouncement = { [weak self] item in
+                guard let self else { return }
+                self.resetNotifications?.send(item, language: self.model.language)
+            }
+            model.onNotificationSettings = { [weak notifications] in notifications?.openSettings() }
+            notifications.configure(model.resetAlertsActive)
+        }
         previewObservation = model.codex.$enabled.combineLatest(model.codex.$showEdgePreview)
             .receive(on: RunLoop.main).sink { [weak self] _ in
                 guard let self, !self.model.isExpanded else { return }
@@ -103,12 +120,21 @@ final class DesktopController: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return event
         }
         NotificationCenter.default.addObserver(self, selector: #selector(screensChanged), name: NSApplication.didChangeScreenParametersNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(panelBecameKey), name: NSWindow.didBecomeKeyNotification, object: panel)
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(didWake), name: NSWorkspace.didWakeNotification, object: nil)
         timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.model.periodicRefresh() }
         }
         timer?.tolerance = 5
         if CommandLine.arguments.contains("--smoke-test") { runWindowSmokeTest() }
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        Task { await resetNotifications?.refreshStatus() }
+    }
+    @objc private func panelBecameKey(_ notification: Notification) {
+        // The floating panel can receive focus without activating the application.
+        Task { await resetNotifications?.refreshStatus() }
     }
 
     private func createMenu() {

@@ -169,7 +169,9 @@ struct RadioView: View {
     }
 
     @ViewBuilder private func storyContent(_ story: RadioItem) -> some View {
-        if #available(macOS 15, *), model.translateArticles, previewLabel == nil, model.channel != .nba {
+        if let quote = story.stockQuote {
+            StockQuoteContent(model: model, quote: quote)
+        } else if #available(macOS 15, *), model.translateArticles, previewLabel == nil, model.channel != .nba {
             let request = ArticleTranslationRequest(item: story, language: model.language.resolved(), repository: model.channel == .github)
             NativeArticleContent(model: model, request: request).id(request.key)
         } else {
@@ -216,7 +218,7 @@ struct RadioView: View {
                 if model.channel == .nba { Text(date, format: .dateTime.hour().minute()) }
                 else { Text(date, style: .relative) }
                 Spacer(minLength: 0)
-                Text(model.t(model.channel == .github ? "RECENT STARS" : (model.channel == .nba ? "PUBLIC SCOREBOARD" : "SOURCE EXCERPTS"))).font(.system(size: 7))
+                Text(model.t(model.channel == .stocks ? "MARKET DATA" : model.channel == .resets ? "PUBLIC ANNOUNCEMENTS" : model.channel == .github ? "RECENT STARS" : model.channel == .nba ? "PUBLIC SCOREBOARD" : "SOURCE EXCERPTS")).font(.system(size: 7))
             }.font(.system(size: 8, design: .monospaced)).opacity(0.75)
         } else {
             Text(model.t("A LITTLE INFORMATION. A LITTLE SPACE.")).font(.system(size: 7, design: .monospaced)).tracking(0.5).opacity(0.65)

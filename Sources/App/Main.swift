@@ -1,10 +1,24 @@
 import AppKit
 import SwiftUI
+import UserNotifications
 
 @main
 struct LittleRadioApp {
     @MainActor static func main() {
         let app = NSApplication.shared
+        if CommandLine.arguments.contains("--notification-status") {
+            UNUserNotificationCenter.current().getNotificationSettings { settings in
+                let names = [0: "not determined", 1: "denied", 2: "authorized", 3: "provisional", 4: "ephemeral"]
+                print("Notification authorization: \(names[settings.authorizationStatus.rawValue] ?? "unknown"); alert setting: \(settings.alertSetting.rawValue)")
+                exit(0)
+            }
+            RunLoop.main.run()
+            return
+        }
+        if let index = CommandLine.arguments.firstIndex(of: "--render-markets"), CommandLine.arguments.count > index + 1 {
+            renderMarkets(to: URL(fileURLWithPath: CommandLine.arguments[index + 1]))
+            return
+        }
         if let index = CommandLine.arguments.firstIndex(of: "--render-bot"), CommandLine.arguments.count > index + 1 {
             renderBot(to: URL(fileURLWithPath: CommandLine.arguments[index + 1]))
             return
@@ -32,6 +46,33 @@ struct LittleRadioApp {
         let delegate = DesktopController()
         app.delegate = delegate
         withExtendedLifetime(delegate) { app.run() }
+    }
+
+    @MainActor static func renderMarkets(to directory: URL) {
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let preferences = UserDefaults(suiteName: "Catecho.MarketsRender")!
+        let model = RadioModel(preview: true, preferences: preferences)
+        model.configuration = FeedConfiguration(); model.configuration.enabledChannels = ["finance", "stocks", "resets"]
+        model.configuration.stockSymbols = ["AAPL", "MSFT"]; model.configuration.resetAlerts = true
+        model.isExpanded = true
+        for language in [RadioLanguage.english, .simplified, .traditional] {
+            model.language = language
+            for appearance in ["Classic", "Flat"] {
+                model.appearance = appearance; model.channel = .stocks
+                for state in ["quote", "cached", "missing"] {
+                    var quote = StockQuote(symbol: "AAPL", name: "Apple Inc. · Sample data", price: 123.45, changePercent: -1.23, asOf: Date().addingTimeInterval(-3600))
+                    if state == "cached" { quote.isCached = true }
+                    if state == "missing" { quote = .unavailable("AAPL") }
+                    model.batches[.stocks] = FeedBatch(items: [quote.item], fetchedAt: Date(), warning: nil)
+                    renderNative(RadioView(model: model, previewLabel: "PREVIEW"), to: directory.appendingPathComponent("\(state)-\(appearance)-\(language.rawValue).png"))
+                }
+                model.channel = .resets
+                model.batches[.resets] = FeedBatch(items: [RadioItem(id: "sample", title: "Codex reset announced", excerpt: "A sample announcement from Tibo. Open the original post for details and eligibility.", source: "Tibo (@thsottiaux) · Codex Resets", url: ResetAnnouncements.attribution, publishedAt: Date(), metric: "RESET ANNOUNCEMENT")], fetchedAt: Date(), warning: nil)
+                renderNative(RadioView(model: model, previewLabel: "PREVIEW"), to: directory.appendingPathComponent("resets-\(appearance)-\(language.rawValue).png"))
+                renderNative(RadioSettings(model: model, initialTab: 3).padding(12), to: directory.appendingPathComponent("settings-\(appearance)-\(language.rawValue).png"))
+            }
+        }
+        print("Rendered market quotes, offline states, reset announcements and settings in three languages")
     }
 
     @MainActor static func renderBot(to directory: URL) {

@@ -17,7 +17,21 @@ final class RadioModel: ObservableObject {
     @Published var quantity: Int { didSet { defaults.set(quantity, forKey: "quantity") } }
     @Published var refreshMinutes: Int { didSet { defaults.set(refreshMinutes, forKey: "refreshMinutes") } }
     @Published var channel: RadioChannel { didSet { defaults.set(channel.rawValue, forKey: "channel"); syncCodex() } }
-    @Published var configuration: FeedConfiguration { didSet { syncCodex() } }
+    @Published var configuration: FeedConfiguration { didSet {
+        syncCodex()
+        let wasActive = oldValue.resetAlerts && oldValue.enabledChannels.contains("resets")
+        if wasActive != resetAlertsActive {
+            resetLedger = ResetAlertLedger()
+            defaults.removeObject(forKey: "resetAlertLedger")
+            onResetAlertsChange?(resetAlertsActive)
+        }
+    } }
+    @Published var resetNotificationStatus = "Alerts are off"
+    var onResetAlertsChange: ((Bool) -> Void)?
+    var onResetAnnouncement: ((RadioItem) -> Void)?
+    var onNotificationSettings: (() -> Void)?
+    private var resetLedger = ResetAlertLedger()
+    var resetAlertsActive: Bool { configuration.resetAlerts && configuration.enabledChannels.contains("resets") }
     @Published var batches: [RadioChannel: FeedBatch] = [:]
     @Published var failures: [RadioChannel: String] = [:]
     @Published var fetching: Set<RadioChannel> = []
@@ -60,6 +74,7 @@ final class RadioModel: ObservableObject {
         channel = RadioChannel(rawValue: defaults.string(forKey: "channel") ?? "ai") ?? .ai
         configuration = defaults.data(forKey: "stationConfiguration").flatMap { try? JSONDecoder().decode(FeedConfiguration.self, from: $0) }
             ?? FeedConfiguration(githubQuery: defaults.string(forKey: "githubQuery") ?? "stars:>10000", customFeedURL: defaults.string(forKey: "customFeedURL") ?? "")
+        resetLedger = defaults.data(forKey: "resetAlertLedger").flatMap { try? JSONDecoder().decode(ResetAlertLedger.self, from: $0) } ?? ResetAlertLedger()
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         cache = RadioCache(directory: cacheDirectory ?? (preview ? FileManager.default.temporaryDirectory.appendingPathComponent("LittleRadioPreview") : support.appendingPathComponent("Little Radio/Cache")))
         if !preview {
@@ -104,7 +119,12 @@ final class RadioModel: ObservableObject {
         codex.configure(enabled: !setupOpen && configuration.enabledChannels.contains("codex"), visible: isExpanded && !settingsOpen && !setupOpen && channel == .codex)
     }
     var feedChannels: [RadioChannel] { channels.filter { $0 != .codex } }
-    var items: [RadioItem] { Array((batches[channel]?.items ?? []).prefix(quantity)) }
+    private func displayItems(_ batch: FeedBatch?, channel: RadioChannel) -> [RadioItem] {
+        let all = batch?.items ?? []
+        if channel == .stocks { return all.filter { $0.stockQuote != nil } + all.filter { $0.stockQuote == nil }.prefix(quantity) }
+        return Array(all.prefix(quantity))
+    }
+    var items: [RadioItem] { displayItems(batches[channel], channel: channel) }
     var currentIndex: Int { min(positions[channel] ?? 0, max(0, items.count - 1)) }
     var item: RadioItem? { items.isEmpty ? nil : items[currentIndex] }
     var isFetching: Bool { fetching.contains(channel) }
@@ -118,7 +138,12 @@ final class RadioModel: ObservableObject {
     }
     var receptionPendingCount: Int { feedChannels.filter { batches[$0] == nil }.count }
     private func refreshInterval(for choice: RadioChannel) -> TimeInterval {
-        TimeInterval(choice == .nba && choice == channel && isExpanded && !settingsOpen ? 60 : refreshMinutes * 60)
+        if choice == .resets && resetAlertsActive { return 300 }
+        if choice == channel && isExpanded && !settingsOpen {
+            if choice == .nba { return 60 }
+            if choice == .stocks { return 300 }
+        }
+        return TimeInterval(refreshMinutes * 60)
     }
     private func dueAt(_ choice: RadioChannel, now: Date) -> Date {
         (lastAttempts[choice] ?? batches[choice]?.fetchedAt)?.addingTimeInterval(refreshInterval(for: choice)) ?? now
@@ -181,17 +206,33 @@ final class RadioModel: ObservableObject {
                 }
             }
             do {
-                let batch = try await self.fetcher(target, config)
+                var batch = try await self.fetcher(target, config)
                 guard !Task.isCancelled, config == self.configuration else { return }
-                let visibleItems = Array((self.batches[target]?.items ?? []).prefix(self.quantity))
+                if target == .stocks {
+                    let previous = self.batches[target]?.items ?? []
+                    let merged = batch.items.map { item -> RadioItem in
+                        guard let quote = item.stockQuote, quote.price == nil,
+                              var saved = previous.first(where: { $0.id == item.id })?.stockQuote, saved.price != nil else { return item }
+                        saved.isCached = true
+                        return saved.item
+                    }
+                    batch = FeedBatch(items: merged, fetchedAt: batch.fetchedAt, warning: batch.warning)
+                }
+                let visibleItems = self.displayItems(self.batches[target], channel: target)
                 let selectedIndex = min(self.positions[target] ?? 0, max(0, visibleItems.count - 1))
                 let selectedID = visibleItems.isEmpty ? nil : visibleItems[selectedIndex].id
                 self.batches[target] = batch
-                if let selectedID, let index = batch.items.firstIndex(where: { $0.id == selectedID }) {
+                if let selectedID, let index = self.displayItems(batch, channel: target).firstIndex(where: { $0.id == selectedID }) {
                     self.positions[target] = index
                 } else { self.positions[target] = 0 }
                 do { try self.cache.save(batch, channel: target, configuration: config); self.cacheWarning = nil }
                 catch { self.cacheWarning = "Updated, but this edition could not be saved offline." }
+                if target == .resets && self.resetAlertsActive {
+                    let fresh = self.resetLedger.consume(batch.items)
+                    self.defaults.set(try? JSONEncoder().encode(self.resetLedger), forKey: "resetAlertLedger")
+                    // One banner per poll; all announcements remain readable in the station.
+                    if let latest = fresh.first { self.onResetAnnouncement?(latest) }
+                }
             } catch {
                 guard !Task.isCancelled, config == self.configuration else { return }
                 self.failures[target] = error.localizedDescription
@@ -213,6 +254,8 @@ final class RadioModel: ObservableObject {
 
     func saveConfiguration(_ candidate: FeedConfiguration, refreshAfterSave: Bool = true) -> String? {
         var next = candidate
+        do { next.stockSymbols = try StockSymbols.normalize(candidate.stockSymbols) }
+        catch { return error.localizedDescription }
         next.enabledChannels = StationCatalog.presets.filter { candidate.enabledChannels.contains($0.rawValue) }.map(\.rawValue)
         next.aiSourceIDs = StationCatalog.aiSources.filter { candidate.aiSourceIDs.contains($0.id) }.map(\.id)
         next.researchTopics = StationCatalog.researchTopics.filter { candidate.researchTopics.contains($0.id) }.map(\.id)

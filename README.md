@@ -14,7 +14,9 @@ The screenshots show sample editions. The app fetches current information from t
 
 - A draggable edge antenna, a floating radio window, and matching Classic and Flat appearances. With Codex enabled, the original slim antenna rests with a plain cream base and hidden hands. Clicking the base brings out white-gloved telescopic arms to pull open its token dashboard.
 - A small, finite edition with source links, refresh status, and an offline cache.
-- AI news, GitHub trends, research, games, NBA, education, psychology, philosophy, science, and technology stations.
+- AI news, GitHub trends, research, games, NBA, financial news, US stocks, education, psychology, philosophy, science, and technology stations.
+- An editable US stock watchlist with timestamped regular-session quotes and market headlines.
+- Optional one-time macOS alerts for new Tibo (@thsottiaux) reset announcements, supplied by the community tracker [Codex Resets](https://codex-resets.com).
 - Multiple research topics at once, including AI and physics. GitHub shows recent star gains from Trending rather than lifetime-star rankings.
 - Custom stations: paste website links to discover RSS/Atom feeds, with a public-webpage reader as a fallback.
 - A back panel with physical-style controls, a mouse-driven flip, and a battery compartment that shows update activity.
@@ -69,11 +71,13 @@ The build script creates and ad-hoc signs `dist/Catecho.app`. An optional first 
 Native diagnostics are available after building:
 
 ```sh
+dist/Catecho.app/Contents/MacOS/LittleRadio --notification-status
 dist/Catecho.app/Contents/MacOS/LittleRadio --geometry-test
 dist/Catecho.app/Contents/MacOS/LittleRadio --smoke-test
 dist/Catecho.app/Contents/MacOS/LittleRadio --setup-preview
 dist/Catecho.app/Contents/MacOS/LittleRadio --codex-preview --show
 dist/Catecho.app/Contents/MacOS/LittleRadio --render-bot /tmp/catecho-bot-previews
+dist/Catecho.app/Contents/MacOS/LittleRadio --render-markets /tmp/catecho-market-previews
 ```
 
 The smoke test briefly creates a native radio panel. Setup preview uses a separate `Catecho.SetupPreview` preferences domain and temporary cache; it preserves its test choices across launches and disables login-item operations. Codex preview uses a separate `Catecho.CodexPreview` domain and sample activity; `--codex-live-preview --show` reads real local usage into a temporary numeric cache. Both disable login-item operations. Keep the installed copy closed when testing a second bundle with the same identifier. See [verification notes](docs/VERIFICATION.md) for the checks performed on this release and remaining limitations.
@@ -94,7 +98,7 @@ The internal executable name `LittleRadio`, bundle identifier `local.littleradio
 
 The app stores preferences and cached editions on the Mac. It has no app analytics or account service. Requests go directly to the websites selected by the user, which receive ordinary web-request metadata such as the IP address.
 
-RSS/Atom feeds are preferred. GitHub Trending, Anthropic's newsroom, and ESPN's public scoreboard use website interfaces that can change or fail. Website reading is bounded and heuristic; it does not execute JavaScript, sign into websites, or guarantee that every update is found. Missing dates, excerpts, statistics, or star counts are not invented. arXiv entries are labelled preprints. NBA scores are periodically fetched, not a guaranteed real-time stream.
+RSS/Atom feeds are preferred. GitHub Trending, Anthropic's newsroom, Yahoo Finance quotes, and ESPN's public scoreboard use website interfaces that can change or fail. Website reading is bounded and heuristic; it does not execute JavaScript, sign into websites, or guarantee that every update is found. Missing dates, excerpts, statistics, or star counts are not invented. arXiv entries are labelled preprints. NBA scores and stock prices are periodically fetched, not guaranteed real-time streams. Stock quotes can be delayed. Reset announcements come from a community tracker, not from your OpenAI account; they cannot confirm that your own allowance was replenished.
 
 The interface and icon follow Catecho's retro radio design. The icon was created with a built-in image-generation tool; its prompts are included in `Resources/CatechoIcon-prompt.txt`.
 
